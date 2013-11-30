@@ -172,5 +172,5 @@ Verity.prototype.logObjectDiff = function (actual, expected){
     this.log("\n\n");
 };
 
-exports.Verity = Verity;
+module.exports = Verity;
 
