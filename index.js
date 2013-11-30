@@ -12,9 +12,9 @@ var isString = function(str){
 
 // checks a response holistically, rather than in parts,
 // which results in better error output.
-var WebTest = function(uri, method){
-  if (!(this instanceof WebTest)) {
-    return new WebTest(uri, method);
+var Verity = function(uri, method){
+  if (!(this instanceof Verity)) {
+    return new Verity(uri, method);
   }
   this.uri = urlgrey(uri || 'http://localhost:80');
   this.method = method || 'GET';
@@ -53,34 +53,34 @@ var WebTest = function(uri, method){
   };
 };
 
-WebTest.prototype.onError = function(cb){
+Verity.prototype.onError = function(cb){
   this.onerror = cb;
 };
 
-WebTest.prototype.expectBody = function(body){
+Verity.prototype.expectBody = function(body){
   this.expectedBody = body;
 };
-WebTest.prototype.expectStatus = function(code){
+Verity.prototype.expectStatus = function(code){
   this.expectedStatus = code;
 };
-WebTest.prototype.expectHeader = function(name, value){
+Verity.prototype.expectHeader = function(name, value){
   this.expectedHeaders[name] = value;
 };
-WebTest.prototype.jsonMode = function(){
+Verity.prototype.jsonMode = function(){
   this.expectHeader('content-type', 'application/json');
   this.jsonModeOn = true;
 };
-WebTest.prototype.before = function(cb){
+Verity.prototype.before = function(cb){
   this.befores.push(cb);
 };
-WebTest.prototype.authStrategy = function(creds, cb){
+Verity.prototype.authStrategy = function(creds, cb){
   // replace this with a function that logs the user in
   return cb(null);
 };
-WebTest.prototype.login = function(creds){
+Verity.prototype.login = function(creds){
   this.creds = creds;
 };
-WebTest.prototype.test = function(cb){
+Verity.prototype.test = function(cb){
   this.message = '';
   // TODO make this all one assertion error message
   var options = { headers : this.headers};
@@ -163,7 +163,7 @@ var makeRequest = function(that, options, cb){
 
 };
 
-WebTest.prototype.logObjectDiff = function (actual, expected){
+Verity.prototype.logObjectDiff = function (actual, expected){
     this.log(difflet({indent:2}).compare(actual, expected));
     this.log("\n\nactual");
     this.log(JSON.stringify(actual, null, 2));
@@ -172,5 +172,5 @@ WebTest.prototype.logObjectDiff = function (actual, expected){
     this.log("\n\n");
 };
 
-exports.WebTest = WebTest;
+exports.Verity = Verity;
 
