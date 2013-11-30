@@ -1,0 +1,27 @@
+{
+  "name": "webtest",
+  "version": "0.0.0",
+  "description": "a lib for testing for http request/response",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/cainus/webtest.git"
+  },
+  "keywords": [
+    "http",
+    "assert",
+    "assertion",
+    "web",
+    "test",
+    "requests"
+  ],
+  "author": "Gregg Caines",
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/cainus/webtest/issues"
+  },
+  "homepage": "https://github.com/cainus/webtest"
+}
