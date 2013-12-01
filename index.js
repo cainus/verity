@@ -19,7 +19,7 @@ var Verity = function(uri, method){
   this.uri = urlgrey(uri || 'http://localhost:80');
   this.method = method || 'GET';
   this.body = '';
-  this.client = request.defaults({jar:true, timeout:3000});
+  this.client = request.defaults({timeout:3000});
   this.headers = {};
   this.expectedBody = '';
   this.expectedStatus = 200;
@@ -27,6 +27,7 @@ var Verity = function(uri, method){
   this.befores = [];
   this.jsonModeOn = false;
   this.message = '';
+  this.clearCookies();
   this.log = function(){
     var addition = '';
     for (var k in arguments){
@@ -53,8 +54,19 @@ var Verity = function(uri, method){
   };
 };
 
+Verity.prototype.setCookiesFromResponse = function(res){
+  var that = this;
+  res.headers['set-cookie'].forEach(function(cookie){
+    that.cookies.push(cookie);
+  });
+};
+
 Verity.prototype.onError = function(cb){
   this.onerror = cb;
+};
+
+Verity.prototype.clearCookies = function(){
+  this.cookies = [];
 };
 
 Verity.prototype.expectBody = function(body){
@@ -82,12 +94,10 @@ Verity.prototype.login = function(creds){
 };
 Verity.prototype.test = function(cb){
   this.message = '';
-  // TODO make this all one assertion error message
   var options = { headers : this.headers};
   options.method = this.method.toLowerCase();
   options.url = this.uri.toString();
   if (!!this.body){
-    console.log("got a body!!: ", this.body);
     if (this.jsonModeOn){
       options.headers['content-type'] = 'application/json';
       if (!isString(this.body)){
@@ -98,8 +108,7 @@ Verity.prototype.test = function(cb){
     }
   }
   var that = this;
-  // TODO: if this.creds, log the user in!!!
-  console.log("about to request: ", options);
+  options.jar = this.jar;
   if (this.creds){
     this.authStrategy(this.creds, function(){
       makeRequest(that, options, cb);
@@ -110,56 +119,65 @@ Verity.prototype.test = function(cb){
 };
 
 var makeRequest = function(that, options, cb){
-    that.client(options, function(err, response, body){
-      if (err) {
-        return that.onerror(err,
-                            options.method,
-                            options.url,
-                            options.headers,
-                            options.body);
-      }
-      if (that.jsonModeOn){
-        try {
-          body = JSON.parse(body);
-        } catch(ex){
-          // do nothing if it doesn't parse.
-          // it will stay as a string
-        }
-      }
-      var failed = false;
-      that.log("STATUS: ");
-      try {
-        that.log('actual: ', response.statusCode);
-        that.log('expected: ', that.expectedStatus);
-        expect(response.statusCode).to.equal(that.expectedStatus);
-      } catch(ex) {
-        that.log("Failure: ");
-        that.log(ex);
-        failed = true;
-      }
-      that.log('');
-      for(var k in that.expectedHeaders){
-        var v = that.expectedHeaders[k];
-        if (k == 'content-type'){
-          var reaper = new Reaper();
-          reaper.register(v);
-          expect(reaper.isAcceptable('application/json')).to.equal(true);
-        } else {
-          expect(response.headers[k]).to.equal(v);
-        }
-      }
-      that.log("BODY: ");
 
-      if (!deepEqual(body, that.expectedBody)){
-        that.log("Failure: ");
-        that.logObjectDiff(body, that.expectedBody);
-        failed = true;
+  var j = request.jar();
+  that.cookies.forEach(function(cookiestr){
+    var cookie = that.client.cookie(cookiestr);
+    j.add(cookie);
+  });
+  options.jar = j;
+  that.client(options, function(err, response, body){
+    if (err) {
+      return that.onerror(err,
+                          options.method,
+                          options.url,
+                          options.headers,
+                          options.body);
+    }
+    if (that.jsonModeOn){
+      try {
+        body = JSON.parse(body);
+      } catch(ex){
+        // do nothing if it doesn't parse.
+        // it will stay as a string
       }
-      if (failed){
-        throw that.message;
+    }
+    var failed = false;
+    that.log("STATUS: ");
+    try {
+      that.log('actual: ', response.statusCode);
+      that.log('expected: ', that.expectedStatus);
+      expect(response.statusCode).to.equal(that.expectedStatus);
+    } catch(ex) {
+      that.log("Failure: ");
+      that.log(ex);
+      failed = true;
+    }
+    that.log('');
+    that.log('RESPONSE HEADERS');
+    that.log("actual: ", response.headers);
+    for(var k in that.expectedHeaders){
+      var v = that.expectedHeaders[k];
+      if (k == 'content-type'){
+        var reaper = new Reaper();
+        reaper.register(v);
+        expect(reaper.isAcceptable('application/json')).to.equal(true);
+      } else {
+        expect(response.headers[k]).to.equal(v);
       }
-      return cb();
-    });
+    }
+    that.log("BODY: ");
+
+    if (!deepEqual(body, that.expectedBody)){
+      that.log("Failure: ");
+      that.logObjectDiff(body, that.expectedBody);
+      failed = true;
+    }
+    if (failed){
+      throw that.message;
+    }
+    return cb();
+  });
 
 };
 
