@@ -25,6 +25,7 @@ var Verity = function(uri, method){
   this.expectedStatus = 200;
   this.expectedHeaders = {};
   this.befores = [];
+  this.response = {};
   this.jsonModeOn = false;
   this.message = '';
   this.clearCookies();
@@ -55,10 +56,47 @@ var Verity = function(uri, method){
 };
 
 Verity.prototype.setCookiesFromResponse = function(res){
+  if (!res){
+    res = this.response.object;
+  }
   var that = this;
   res.headers['set-cookie'].forEach(function(cookie){
-    that.cookies.push(cookie);
+    cookie = cookieStringToObject(cookie);
+    if (cookie.value === ''){
+      delete that.cookies[cookie.name];
+    } else {
+      that.cookies[cookie.name] = cookie;
+    }
   });
+};
+
+var cookieObjectToString = function(obj){
+  var pairs = [obj.name + '=' + obj.value];
+  for(var k in obj){
+    if (k !== 'name' && k !== 'value'){
+      pairs.push(k + '=' + obj[k]);
+    }
+  }
+  var str = pairs.join('; ');
+  return str;
+};
+
+var cookieStringToObject = function(str){
+  var obj = {};
+  var pairs = str.toString().split(";");
+  pairs.forEach(function(pair){
+    var pieces = pair.trim().split('=');
+    var name = [
+      "Domain", "Path", "Expires"
+    ];
+    if (name.indexOf(pieces[0]) === -1){
+      obj.name = pieces[0];
+      obj.value = pieces[1];
+    } else {
+      obj[pieces[0]] = pieces[1];
+    }
+  });
+  return obj;
 };
 
 Verity.prototype.onError = function(cb){
@@ -66,7 +104,7 @@ Verity.prototype.onError = function(cb){
 };
 
 Verity.prototype.clearCookies = function(){
-  this.cookies = [];
+  this.cookies = {};
 };
 
 Verity.prototype.expectBody = function(body){
@@ -119,13 +157,16 @@ Verity.prototype.test = function(cb){
 };
 
 var makeRequest = function(that, options, cb){
-
+  that.creds = null;  // forget that we know how to log in
   var j = request.jar();
-  that.cookies.forEach(function(cookiestr){
+  for (var k in that.cookies){
+    var obj = that.cookies[k];
+    var cookiestr = cookieObjectToString(obj);
     var cookie = that.client.cookie(cookiestr);
     j.add(cookie);
-  });
+  }
   options.jar = j;
+  that.response = {};
   that.client(options, function(err, response, body){
     if (err) {
       return that.onerror(err,
@@ -134,6 +175,11 @@ var makeRequest = function(that, options, cb){
                           options.headers,
                           options.body);
     }
+    that.response.headers = response.headers;
+    that.response.body = body;
+    that.response.status = response.statusCode;
+    that.response.statusCode = response.statusCode;
+    that.response.object = response;
     if (that.jsonModeOn){
       try {
         body = JSON.parse(body);
