@@ -21,7 +21,7 @@ var Verity = function(uri, method){
   this.body = '';
   this.client = request.defaults({timeout:3000});
   this.headers = {};
-  this.expectedBody = '';
+  this.expectedBody = null;
   this.expectedStatus = 200;
   this.expectedHeaders = {};
   this.befores = [];
@@ -214,10 +214,12 @@ var makeRequest = function(that, options, cb){
     }
     that.log("BODY: ");
 
-    if (!deepEqual(body, that.expectedBody)){
-      that.log("Failure: ");
-      that.logObjectDiff(body, that.expectedBody);
-      failed = true;
+    if (that.expectedBody !== null){
+      if (!deepEqual(body, that.expectedBody)){
+        that.log("Failure: ");
+        that.logObjectDiff(body, that.expectedBody);
+        failed = true;
+      }
     }
     if (failed){
       throw that.message;
