@@ -2,6 +2,7 @@ var difflet = require('difflet');
 var deepEqual = require('deep-equal');
 var expect = require("expect.js");
 var util = require('util');
+var sift = require('sift');
 var urlgrey = require('urlgrey');
 var request = require('request');
 var Reaper = require('reaper');
@@ -24,7 +25,9 @@ var Verity = function(uri, method){
   this.expectedBody = null;
   this.expectedStatus = 200;
   this.expectedHeaders = {};
+  this._expectedBodyTesters = [];
   this.befores = [];
+  this._expected
   this.response = {};
   this.jsonModeOn = false;
   this.message = '';
@@ -54,6 +57,42 @@ var Verity = function(uri, method){
     throw "unexpected error: " + JSON.stringify((err.message || err));
   };
 };
+
+/**
+ * filter body can be a sift object, or a function
+ */
+
+
+
+Verity.prototype.checkBody = function (expectedCheckBody) {
+  var tester = sift(expectedCheckBody).test;
+  tester.expectedBody = expectedCheckBody;
+  this._expectedBodyTesters.push(tester);
+  return this;
+}
+
+/**
+ */
+
+Verity.prototype.expectBody = function (expectedBody) {
+
+  var tester = function (body) {
+    return deepEqual(body, expectedBody);
+  };
+
+  tester.expectedBody = expectedBody;
+
+  this._expectedBodyTesters.push(tester);
+  return this;
+}
+
+/**
+ */
+
+Verity.prototype.expectStatus = function (code) {
+  this.expectedStatus = code;
+  return this;
+}
 
 Verity.prototype.setCookiesFromResponse = function(res){
   if (!res){
@@ -107,12 +146,6 @@ Verity.prototype.clearCookies = function(){
   this.cookies = {};
 };
 
-Verity.prototype.expectBody = function(body){
-  this.expectedBody = body;
-};
-Verity.prototype.expectStatus = function(code){
-  this.expectedStatus = code;
-};
 Verity.prototype.expectHeader = function(name, value){
   this.expectedHeaders[name] = value;
 };
@@ -129,6 +162,7 @@ Verity.prototype.authStrategy = function(creds, cb){
 };
 Verity.prototype.login = function(creds){
   this.creds = creds;
+  return this;
 };
 Verity.prototype.test = function(cb){
   this.message = '';
@@ -214,6 +248,29 @@ var makeRequest = function(that, options, cb){
     }
     that.log("BODY: ");
 
+    // newer body tester
+
+    /**
+     verify.
+      checkBody(siftObj).
+      expectBody(exactOb)
+     */
+
+    // need to check if the body is an object
+    // because  body parsing could blow up here.
+    if (typeof body === "object") {
+
+      for (var i = that._expectedBodyTesters.length; i--;) {
+        var bodyTester = that._expectedBodyTesters[i];
+        if (!bodyTester(body)) {
+          that.log("Failure: ");
+          that.logObjectDiff(body, bodyTester.expectedBody);
+          failed = true;
+        }
+      }
+    }
+
+    // DEPRECATED
     if (that.expectedBody !== null){
       if (!deepEqual(body, that.expectedBody)){
         that.log("Failure: ");
@@ -221,6 +278,7 @@ var makeRequest = function(that, options, cb){
         failed = true;
       }
     }
+
     if (failed){
       throw that.message;
     }
