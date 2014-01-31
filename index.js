@@ -26,8 +26,9 @@ var Verity = function(uri, method){
   this.expectedStatus = 200;
   this.expectedHeaders = {};
   this._expectedBodyTesters = [];
+  this._shouldThrow = true;
   this.befores = [];
-  this._expected
+  this._expected = null;
   this.response = {};
   this.jsonModeOn = false;
   this.message = '';
@@ -69,12 +70,13 @@ Verity.prototype.checkBody = function (expectedCheckBody) {
   tester.expectedBody = expectedCheckBody;
   this._expectedBodyTesters.push(tester);
   return this;
-}
+};
 
 /**
  */
 
 Verity.prototype.expectBody = function (expectedBody) {
+  this.expectedBody = expectedBody;
 
   var tester = function (body) {
     return deepEqual(body, expectedBody);
@@ -84,7 +86,7 @@ Verity.prototype.expectBody = function (expectedBody) {
 
   this._expectedBodyTesters.push(tester);
   return this;
-}
+};
 
 /**
  */
@@ -92,7 +94,7 @@ Verity.prototype.expectBody = function (expectedBody) {
 Verity.prototype.expectStatus = function (code) {
   this.expectedStatus = code;
   return this;
-}
+};
 
 Verity.prototype.setCookiesFromResponse = function(res){
   if (!res){
@@ -152,6 +154,7 @@ Verity.prototype.expectHeader = function(name, value){
 Verity.prototype.jsonMode = function(){
   this.expectHeader('content-type', 'application/json');
   this.jsonModeOn = true;
+  return this;
 };
 Verity.prototype.before = function(cb){
   this.befores.push(cb);
@@ -190,6 +193,32 @@ Verity.prototype.test = function(cb){
   }
 };
 
+Verity.prototype.makeRequest = function(cb){
+  var options = { headers : this.headers};
+  options.method = this.method.toLowerCase();
+  options.url = this.uri.toString();
+  if (!!this.body){
+    if (this.jsonModeOn){
+      options.headers['content-type'] = 'application/json';
+      if (!isString(this.body)){
+        options.body = JSON.stringify(this.body);
+      }
+    } else {
+      options.body = this.body;
+    }
+  }
+  var that = this;
+  options.jar = this.jar;
+  if (this.creds){
+    this.authStrategy(this.creds, function(){
+      makeRequest(that, options, cb);
+    });
+  } else {
+    makeRequest(that, options, cb);
+  }
+};
+
+
 var makeRequest = function(that, options, cb){
   that.creds = null;  // forget that we know how to log in
   var j = request.jar();
@@ -209,6 +238,11 @@ var makeRequest = function(that, options, cb){
                           options.headers,
                           options.body);
     }
+    var errObject = {
+      status : {},
+      headers : {},
+      body : {}
+    };
     that.response.headers = response.headers;
     that.response.body = body;
     that.response.status = response.statusCode;
@@ -224,6 +258,8 @@ var makeRequest = function(that, options, cb){
     }
     var failed = false;
     that.log("STATUS: ");
+    errObject.status.actual = response.statusCode;
+    errObject.status.expected = that.expectedStatus;
     try {
       that.log('actual: ', response.statusCode);
       that.log('expected: ', that.expectedStatus);
@@ -246,6 +282,10 @@ var makeRequest = function(that, options, cb){
         expect(response.headers[k]).to.equal(v);
       }
     }
+    errObject.body.actual = body;
+    errObject.body.expected = that.expectedBody;
+    errObject.headers.actual = response.headers;
+    errObject.headers.expected = that.expectedHeaders;
     that.log("BODY: ");
 
     // newer body tester
@@ -275,16 +315,27 @@ var makeRequest = function(that, options, cb){
       if (!deepEqual(body, that.expectedBody)){
         that.log("Failure: ");
         that.logObjectDiff(body, that.expectedBody);
+        errObject.body.diff = (difflet({indent:2}).
+                                compare(errObject.body.actual, errObject.body.expected));
         failed = true;
       }
     }
 
     if (failed){
-      throw that.message;
+      if (that._shouldThrow){
+        throw that.message;
+      } else {
+        return cb(errObject);
+      }
     }
     return cb();
   });
 
+};
+
+Verity.prototype.shouldThrow = function (should){
+  this._shouldThrow = should;
+  return this;
 };
 
 Verity.prototype.logObjectDiff = function (actual, expected){

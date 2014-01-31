@@ -4,7 +4,7 @@
   "description": "a lib for testing for http request/response",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "make test"
   },
   "repository": {
     "type": "git",
@@ -24,6 +24,13 @@
     "url": "https://github.com/cainus/verity/issues"
   },
   "homepage": "https://github.com/cainus/verity",
+  "devDependencies": {
+    "express": "3.4.8",
+    "istanbul": "0.2.4",
+    "mocha": "1.17.1",
+    "jshint": "2.4.3",
+    "coveralls": "2.7.0"
+  },
   "dependencies": {
     "reaper": "0.3.1",
     "deep-equal": "0.1.0",
