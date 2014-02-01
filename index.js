@@ -325,10 +325,10 @@ var makeRequest = function(that, options, cb){
       if (that._shouldThrow){
         throw that.message;
       } else {
-        return cb(errObject);
+        return cb(new Error('Expectations failed'), errObject);
       }
     }
-    return cb();
+    return cb(null, errObject);
   });
 
 };
