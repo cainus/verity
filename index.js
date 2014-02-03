@@ -1,98 +1,66 @@
-var difflet = require('difflet');
 var deepEqual = require('deep-equal');
 var expect = require("expect.js");
 var util = require('util');
-var sift = require('sift');
 var urlgrey = require('urlgrey');
 var request = require('request');
+var superagent = require('superagent');
 var Reaper = require('reaper');
+var difflet = require('difflet');
+var diff = difflet({indent:2}).compare;
+var assert = require('assert');
 
 var isString = function(str){
   return toString.call(str) == '[object String]';
 };
 
+var isFunction = function(functionToCheck) {
+ var getType = {};
+ return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
+};
+
+var client = request.defaults({
+  timeout:3000,
+  jar: request.jar()
+});
+
 // checks a response holistically, rather than in parts,
 // which results in better error output.
-var Verity = function(uri, method){
+var Verity = function(uri, _method){
   if (!(this instanceof Verity)) {
-    return new Verity(uri, method);
+    return new Verity(uri, _method);
   }
   this.uri = urlgrey(uri || 'http://localhost:80');
-  this.method = method || 'GET';
-  this.body = '';
-  this.client = request.defaults({timeout:3000});
+  this._method = _method || 'GET';
+  this._body = '';
+  this.bodyChecks = [];
+  this.client = client;
+  this.client.jar();
   this.headers = {};
+  this.shouldLog = false;
   this.expectedBody = null;
-  this.expectedStatus = 200;
-  this.expectedHeaders = {};
+  this._expectedStatus = 200;
+  this._expectedHeaders = {};
   this._expectedBodyTesters = [];
-  this._shouldThrow = true;
-  this.befores = [];
   this._expected = null;
   this.response = {};
   this.jsonModeOn = false;
   this.message = '';
   this.clearCookies();
-  this.log = function(){
-    var addition = '';
-    for (var k in arguments){
-      if (isString(arguments[k])){
-        addition += arguments[k];
-      } else {
-        addition += util.inspect(arguments[k]) + " ";
-      }
-    }
-    addition += "\n";
-    this.message += addition;
-    //process.stdout.write(addition);
-  };
-  this.onerror = function(err, method, uri, headers, body){
-    this.log("");
-    this.log("unexpected error: ", (err.message || err));
-    this.log(util.inspect(err));
-    this.log("method: ", method);
-    this.log("uri: ", uri);
-    this.log("body: ", body);
-    this.log("headers: ", headers);
-    this.log("");
-    throw "unexpected error: " + JSON.stringify((err.message || err));
-  };
 };
 
-/**
- * filter body can be a sift object, or a function
- */
 
-
-
-Verity.prototype.checkBody = function (expectedCheckBody) {
-  var tester = sift(expectedCheckBody).test;
-  tester.expectedBody = expectedCheckBody;
-  this._expectedBodyTesters.push(tester);
+Verity.prototype.body = function(body){
+  this._body = body;
   return this;
 };
 
-/**
- */
-
-Verity.prototype.expectBody = function (expectedBody) {
-  this.expectedBody = expectedBody;
-
-  var tester = function (body) {
-    return deepEqual(body, expectedBody);
-  };
-
-  tester.expectedBody = expectedBody;
-
-  this._expectedBodyTesters.push(tester);
+Verity.prototype.method = function(method){
+  this._method = method;
   return this;
 };
-
-/**
- */
 
 Verity.prototype.expectStatus = function (code) {
-  this.expectedStatus = code;
+  this._expectedStatus = code;
   return this;
 };
 
@@ -140,24 +108,19 @@ var cookieStringToObject = function(str){
   return obj;
 };
 
-Verity.prototype.onError = function(cb){
-  this.onerror = cb;
-};
-
 Verity.prototype.clearCookies = function(){
   this.cookies = {};
+  return this;
 };
 
 Verity.prototype.expectHeader = function(name, value){
-  this.expectedHeaders[name] = value;
+  this._expectedHeaders[name] = value;
+  return this;
 };
 Verity.prototype.jsonMode = function(){
   this.expectHeader('content-type', 'application/json');
   this.jsonModeOn = true;
   return this;
-};
-Verity.prototype.before = function(cb){
-  this.befores.push(cb);
 };
 Verity.prototype.authStrategy = function(creds, cb){
   // replace this with a function that logs the user in
@@ -170,20 +133,19 @@ Verity.prototype.login = function(creds){
 Verity.prototype.test = function(cb){
   this.message = '';
   var options = { headers : this.headers};
-  options.method = this.method.toLowerCase();
+  options.method = this._method.toLowerCase();
   options.url = this.uri.toString();
-  if (!!this.body){
+  if (!!this._body){
     if (this.jsonModeOn){
       options.headers['content-type'] = 'application/json';
-      if (!isString(this.body)){
-        options.body = JSON.stringify(this.body);
+      if (!isString(this._body)){
+        options.body = JSON.stringify(this._body);
       }
     } else {
-      options.body = this.body;
+      options.body = this._body;
     }
   }
   var that = this;
-  options.jar = this.jar;
   if (this.creds){
     this.authStrategy(this.creds, function(){
       makeRequest(that, options, cb);
@@ -193,33 +155,17 @@ Verity.prototype.test = function(cb){
   }
 };
 
-Verity.prototype.makeRequest = function(cb){
-  var options = { headers : this.headers};
-  options.method = this.method.toLowerCase();
-  options.url = this.uri.toString();
-  if (!!this.body){
-    if (this.jsonModeOn){
-      options.headers['content-type'] = 'application/json';
-      if (!isString(this.body)){
-        options.body = JSON.stringify(this.body);
-      }
-    } else {
-      options.body = this.body;
-    }
-  }
-  var that = this;
-  options.jar = this.jar;
-  if (this.creds){
-    this.authStrategy(this.creds, function(){
-      makeRequest(that, options, cb);
-    });
-  } else {
-    makeRequest(that, options, cb);
-  }
+// TODO make sure this gets called
+var postRequestReset = function(v){
+  v.bodyChecks = [];
+  v._body = '';
+  v._headers = {};
 };
-
 
 var makeRequest = function(that, options, cb){
+  // options will have : headers, method, url, body
+  options.jar = that.jar;
+
   that.creds = null;  // forget that we know how to log in
   var j = request.jar();
   for (var k in that.cookies){
@@ -232,22 +178,14 @@ var makeRequest = function(that, options, cb){
   that.response = {};
   that.client(options, function(err, response, body){
     if (err) {
-      return that.onerror(err,
-                          options.method,
-                          options.url,
-                          options.headers,
-                          options.body);
+      return cb(err);
     }
-    var errObject = {
+    that.response = response;
+    var result = {
       status : {},
       headers : {},
       body : {}
     };
-    that.response.headers = response.headers;
-    that.response.body = body;
-    that.response.status = response.statusCode;
-    that.response.statusCode = response.statusCode;
-    that.response.object = response;
     if (that.jsonModeOn){
       try {
         body = JSON.parse(body);
@@ -256,24 +194,20 @@ var makeRequest = function(that, options, cb){
         // it will stay as a string
       }
     }
+    
     var failed = false;
-    that.log("STATUS: ");
-    errObject.status.actual = response.statusCode;
-    errObject.status.expected = that.expectedStatus;
-    try {
-      that.log('actual: ', response.statusCode);
-      that.log('expected: ', that.expectedStatus);
-      expect(response.statusCode).to.equal(that.expectedStatus);
-    } catch(ex) {
-      that.log("Failure: ");
-      that.log(ex);
+
+
+    // statusCode stuff
+    result.status.actual = response.statusCode;
+    result.status.expected = that._expectedStatus;
+    if (response.statusCode != that._expectedStatus){
       failed = true;
     }
-    that.log('');
-    that.log('RESPONSE HEADERS');
-    that.log("actual: ", response.headers);
-    for(var k in that.expectedHeaders){
-      var v = that.expectedHeaders[k];
+
+    // header stuff
+    for(var k in that._expectedHeaders){
+      var v = that._expectedHeaders[k];
       if (k == 'content-type'){
         var reaper = new Reaper();
         reaper.register(v);
@@ -282,70 +216,113 @@ var makeRequest = function(that, options, cb){
         expect(response.headers[k]).to.equal(v);
       }
     }
-    errObject.body.actual = body;
-    errObject.body.expected = that.expectedBody;
-    errObject.headers.actual = response.headers;
-    errObject.headers.expected = that.expectedHeaders;
-    that.log("BODY: ");
+    result.headers.actual = response.headers;
+    result.headers.expected = that._expectedHeaders;
 
-    // newer body tester
-
-    /**
-     verify.
-      checkBody(siftObj).
-      expectBody(exactOb)
-     */
-
-    // need to check if the body is an object
-    // because  body parsing could blow up here.
-    if (typeof body === "object") {
-
-      for (var i = that._expectedBodyTesters.length; i--;) {
-        var bodyTester = that._expectedBodyTesters[i];
-        if (!bodyTester(body)) {
-          that.log("Failure: ");
-          that.logObjectDiff(body, bodyTester.expectedBody);
-          failed = true;
-        }
-      }
+    // body stuff
+    result.body.actual = body;
+    result.body.errors = [];
+    result.body.errors = getBodyErrors(that, body);
+    if (result.body.errors.length > 0){
+      failed = true;
     }
 
-    // DEPRECATED
-    if (that.expectedBody !== null){
-      if (!deepEqual(body, that.expectedBody)){
-        that.log("Failure: ");
-        that.logObjectDiff(body, that.expectedBody);
-        errObject.body.diff = (difflet({indent:2}).
-                                compare(errObject.body.actual, errObject.body.expected));
-        failed = true;
-      }
+    if (that.shouldLog){
+      prettyDiff(result);
     }
-
     if (failed){
-      if (that._shouldThrow){
-        throw that.message;
-      } else {
-        return cb(new Error('Expectations failed'), errObject);
-      }
+      return cb(new Error('Expectations failed'), result);
     }
-    return cb(null, errObject);
+    postRequestReset(that);
+    return cb(null, result);
   });
 
 };
 
-Verity.prototype.shouldThrow = function (should){
-  this._shouldThrow = should;
+var getBodyErrors = function(v, body){
+  var errors = [];
+  var testBody = body;
+  v.bodyChecks.forEach(function(check){
+    try {
+      check.fnTest(testBody);
+    } catch (ex){
+      errors.push(ex);
+    }
+  });
+  return errors;
+};
+
+Verity.prototype.checkBody = function(description, fnTest){
+  // each call adds an assertion to the body assertions
+  // fnTest should throw an assert error
+  // optionalJsonPath is optional
+  if (!fnTest){
+    fnTest = description;
+    description = '';
+  }
+  if (!isFunction(fnTest)){
+    var expected = fnTest;
+    fnTest = function(body){
+      assertObjectEquals(body, expected);
+    };
+  }
+  this.bodyChecks.push({ message : description,
+                         fnTest : fnTest });
   return this;
 };
 
-Verity.prototype.logObjectDiff = function (actual, expected){
-    this.log(difflet({indent:2}).compare(actual, expected));
-    this.log("\n\nactual");
-    this.log(JSON.stringify(actual, null, 2));
-    this.log("\n\nexpected");
-    this.log(JSON.stringify(expected, null, 2));
-    this.log("\n\n");
+Verity.prototype.expectBody = function(body){
+  return this.checkBody(body);
 };
 
-module.exports = Verity;
+// format the diff better
+var prettyDiff = function (result){
+  if (result.body.errors && result.body.errors.length > 0){
+    console.log("\nBODY ERRORS: ");
+    result.body.errors.forEach(function(error){
+      console.log(prettyJson({actual : error.actual, expected : error.expected}));
+      console.log(error.colorDiff);
+    });
+  }
+  console.log('HEADERS: \n', prettyJson(result.headers));
+  console.log('STATUS: \n', prettyJson(result.status));
+};
 
+Verity.prototype.log = function(shouldLog){
+  if (shouldLog !== false){
+    this.shouldLog = true;
+  } else {
+    this.shouldLog = false;
+  }
+  return this;
+};
+
+// TODO fix the eventemitter issue
+// TODO possible libs :
+//  - create a jsonschema from code
+//
+// goals : 
+// - be good at reporting the whole diff at once (not just the first one found)
+// - make repeated requests easy (with cookies)
+// - 
+// test:
+// chaining with cookies
+
+var assertObjectEquals = function (actual, expected){
+  if (!deepEqual(actual, expected)){
+    var err = new Error("ObjectEqualityAssertionError");
+    err.actual = actual;
+    err.expected = expected;
+    err.colorDiff = difflet.compare(actual, expected);
+    throw err;
+  }
+};
+  
+var prettyJson = function(obj){
+  return JSON.stringify(obj, null, 2);
+};
+
+Verity.assertObjectEquals = assertObjectEquals;
+Verity.prototype.assertObjectEquals = assertObjectEquals;
+
+module.exports = Verity;
