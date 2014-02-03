@@ -69,14 +69,16 @@ Verity.prototype.setCookiesFromResponse = function(res){
     res = this.response.object;
   }
   var that = this;
-  res.headers['set-cookie'].forEach(function(cookie){
-    cookie = cookieStringToObject(cookie);
-    if (cookie.value === ''){
-      delete that.cookies[cookie.name];
-    } else {
-      that.cookies[cookie.name] = cookie;
-    }
-  });
+  if (res.headers['set-cookie']){
+    res.headers['set-cookie'].forEach(function(cookie){
+      cookie = cookieStringToObject(cookie);
+      if (cookie.value === ''){
+        delete that.cookies[cookie.name];
+      } else {
+        that.cookies[cookie.name] = cookie;
+      }
+    });
+  }
 };
 
 var cookieObjectToString = function(obj){
@@ -181,6 +183,7 @@ var makeRequest = function(that, options, cb){
       return cb(err);
     }
     that.response = response;
+    that.setCookiesFromResponse(response);
     var result = {
       status : {},
       headers : {},
