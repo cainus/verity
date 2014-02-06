@@ -8,6 +8,7 @@ var Reaper = require('reaper');
 var difflet = require('difflet');
 var diff = difflet({indent:2}).compare;
 var assert = require('assert');
+var _ = require('underscore');
 
 var isString = function(str){
   return toString.call(str) == '[object String]';
@@ -17,11 +18,6 @@ var isFunction = function(functionToCheck) {
  var getType = {};
  return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
 };
-
-var client = request.defaults({
-  timeout:3000,
-  jar: request.jar()
-});
 
 // checks a response holistically, rather than in parts,
 // which results in better error output.
@@ -33,19 +29,23 @@ var Verity = function(uri, _method){
   this._method = _method || 'GET';
   this._body = '';
   this.bodyChecks = [];
-  this.client = client;
-  this.client.jar();
+  var newJar = request.jar();
+  this.client = request.defaults({
+    timeout:3000,
+    jar: newJar
+  });
   this.headers = {};
+  this.cookies = {};
   this.shouldLog = false;
   this.expectedBody = null;
   this._expectedStatus = 200;
+  this._expectedCookies = {};
   this._expectedHeaders = {};
   this._expectedBodyTesters = [];
   this._expected = null;
   this.response = {};
   this.jsonModeOn = false;
   this.message = '';
-  this.clearCookies();
 };
 
 
@@ -64,21 +64,19 @@ Verity.prototype.expectStatus = function (code) {
   return this;
 };
 
-Verity.prototype.setCookiesFromResponse = function(res){
-  if (!res){
-    res = this.response.object;
-  }
-  var that = this;
+var getCookiesFromResponse = function(res){
+  var cookies = {};
   if (res.headers['set-cookie']){
     res.headers['set-cookie'].forEach(function(cookie){
       cookie = cookieStringToObject(cookie);
       if (cookie.value === ''){
-        delete that.cookies[cookie.name];
+        delete cookies[cookie.name];
       } else {
-        that.cookies[cookie.name] = cookie;
+        cookies[cookie.name] = cookie;
       }
     });
   }
+  return cookies;
 };
 
 var cookieObjectToString = function(obj){
@@ -97,22 +95,24 @@ var cookieStringToObject = function(str){
   var pairs = str.toString().split(";");
   pairs.forEach(function(pair){
     var pieces = pair.trim().split('=');
-    var name = [
-      "Domain", "Path", "Expires"
+    pieces = pieces.map(function(str){
+      return str.trim();
+    });
+    var key = [
+      "Domain", "Path", "Expires", "Secure"
     ];
-    if (name.indexOf(pieces[0]) === -1){
+    if (key.indexOf(pieces[0]) === -1){
       obj.name = pieces[0];
       obj.value = pieces[1];
     } else {
       obj[pieces[0]] = pieces[1];
+      if (pieces[0] == "Secure"){
+        obj[pieces[0]] = true;
+        
+      }
     }
   });
   return obj;
-};
-
-Verity.prototype.clearCookies = function(){
-  this.cookies = {};
-  return this;
 };
 
 Verity.prototype.expectHeader = function(name, value){
@@ -132,6 +132,12 @@ Verity.prototype.login = function(creds){
   this.creds = creds;
   return this;
 };
+
+Verity.prototype.expectCookie = function(name, value){
+  this._expectedCookies[name] = value;
+  return this;
+};
+
 Verity.prototype.test = function(cb){
   this.message = '';
   var options = { headers : this.headers};
@@ -158,17 +164,20 @@ Verity.prototype.test = function(cb){
 };
 
 // TODO make sure this gets called
-var postRequestReset = function(v){
-  v.bodyChecks = [];
-  v._body = '';
-  v._headers = {};
+Verity.prototype.reset = function(){
+  this.bodyChecks = [];
+  this._body = '';
+  this._headers = {};
+  this._expectedCookies = {};
+  this._expectedHeaders = {};
+  this._expectedStatus = 200;
+  this._expectedBodyTesters = [];
 };
 
 var makeRequest = function(that, options, cb){
   // options will have : headers, method, url, body
-  options.jar = that.jar;
-
   that.creds = null;  // forget that we know how to log in
+  /*
   var j = request.jar();
   for (var k in that.cookies){
     var obj = that.cookies[k];
@@ -177,13 +186,14 @@ var makeRequest = function(that, options, cb){
     j.add(cookie);
   }
   options.jar = j;
+  */
   that.response = {};
   that.client(options, function(err, response, body){
     if (err) {
       return cb(err);
     }
     that.response = response;
-    that.setCookiesFromResponse(response);
+    that.cookies = _.extend(that.cookies, getCookiesFromResponse(response));
     var result = {
       status : {},
       headers : {},
@@ -209,6 +219,7 @@ var makeRequest = function(that, options, cb){
     }
 
     // header stuff
+    var headerErrors = [];
     for(var k in that._expectedHeaders){
       var v = that._expectedHeaders[k];
       if (k == 'content-type'){
@@ -216,11 +227,36 @@ var makeRequest = function(that, options, cb){
         reaper.register(v);
         expect(reaper.isAcceptable('application/json')).to.equal(true);
       } else {
-        expect(response.headers[k]).to.equal(v);
+        try {
+          expect(response.headers[k]).to.equal(v);
+        } catch (ex){
+          headerErrors.push(ex);
+        }
       }
     }
     result.headers.actual = response.headers;
     result.headers.expected = that._expectedHeaders;
+    if (headerErrors.length > 0){
+      result.headers.errors = headerErrors;
+    }
+
+    // cookie stuff
+    var cookieErrors = [];
+    for(var cookieKey in that._expectedCookies){
+      var cookieVal = that._expectedCookies[cookieKey];
+      try {
+        expect(that.cookies[cookieKey].value).to.equal(cookieVal);
+      } catch(ex){
+        cookieErrors.push(ex);
+        failed = true;
+      }
+    }
+    if (_.keys(that._expectedCookies).length !== 0){
+      result.cookies = {};
+      result.cookies.actual = that.cookies;
+      result.cookies.expected = that._expectedCookies;
+      result.cookies.errors = cookieErrors;
+    }
 
     // body stuff
     result.body.actual = body;
@@ -230,13 +266,13 @@ var makeRequest = function(that, options, cb){
       failed = true;
     }
 
-    if (that.shouldLog){
+    if (failed && that.shouldLog){
       prettyDiff(result);
     }
     if (failed){
       return cb(new Error('Expectations failed'), result);
     }
-    postRequestReset(that);
+    that.reset();
     return cb(null, result);
   });
 

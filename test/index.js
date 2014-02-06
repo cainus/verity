@@ -29,12 +29,25 @@ describe('verity', function(){
   before(function(done){
     var express = require('express');
     var app = express();
+    app.use(express.cookieParser('SECRET'));
 
     app.get('/simpleGET', function(req, res){
       res.send('hello world');
     });
+
     app.get('/someJson', function(req, res){
       res.send({"test":"test"});
+    });
+
+    app.get('/echoCookies', function(req, res){
+      console.log("server detected cookies: ", req.cookies);
+      res.send({gotCookies:req.cookies});
+    });
+
+    app.get('/cookies', function(req, res){
+      res.cookie('name', 'tobi', { path: '/echoCookies', secure: true });
+      res.cookie('rememberme', '1', { expires: new Date(Date.now() + 900000), httpOnly: true });
+      res.send({gotCookies : req.cookies});
     });
 
     server = app.listen(3000, function(err){
@@ -54,10 +67,43 @@ describe('verity', function(){
       expectBody('hello world').
       test(done);
   });
+  it("can get cookies and verify them", function(done){
+    verity('http://localhost:3000/cookies').
+      expectStatus(200).
+      jsonMode().
+      log(false).
+      expectCookie("name", "todu").
+      expectBody({gotCookies:{}}).
+      test(function(err, result){
+        expect(result.cookies.errors[0].message).
+          to.eql("expected 'tobi' to equal 'todu'");
+        done();
+      });
+  });
+  it("can get cookies and return them", function(done){
+    var v = verity('http://localhost:3000/cookies');
+    v.expectStatus(200).
+      jsonMode().
+      log(true).
+      expectCookie("name", "tobi").
+      expectBody({gotCookies:{}}).
+      test(function(err, result){
+        expect(err).
+          to.be(null);
+        v.uri = v.uri.path('echoCookies');
+        v.
+         expectBody({gotCookies:{rememberme:1}}).
+         log(true).
+         test(function(err, result){
+           done(err);
+         });
+      });
+  });
   it("can do a simple GET with 404", function(done){
     verity('http://localhost:3000/doesNotExist').
       expectStatus(200).
       expectBody('hello world').
+      log(false).
       test(function(err, result){
         expect(err.message).to.be('Expectations failed');
         delete result.headers.actual.date;
@@ -106,6 +152,7 @@ describe('verity', function(){
       jsonMode().
       expectStatus(200).
       expectBody({"asdf":"asdf"}).
+      log(false).
       test(function(err, result){
         delete result.headers.actual.date;
           //date header changes too much to test easily
@@ -177,6 +224,7 @@ describe('verity', function(){
       it("can find errors", function(done){
         verity('http://localhost:3000/someJson').
           jsonMode().
+          log(false).
           expectStatus(200).
           checkBody(function(body){
             expect(body.asdf).to.equal("asdf");
