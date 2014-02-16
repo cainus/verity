@@ -9,6 +9,7 @@ var difflet = require('difflet');
 var diff = difflet({indent:2}).compare;
 var assert = require('assert');
 var _ = require('underscore');
+var requestify = require('requestify');
 
 var isString = function(str){
   return toString.call(str) == '[object String]';
@@ -29,10 +30,10 @@ var Verity = function(uri, _method){
   this._method = _method || 'GET';
   this._body = '';
   this.bodyChecks = [];
-  var newJar = request.jar();
+  this.cookieJar = request.jar();
   this.client = request.defaults({
     timeout:3000,
-    jar: newJar
+    jar: this.cookieJar
   });
   this.headers = {};
   this.cookies = {};
@@ -62,6 +63,35 @@ Verity.prototype.method = function(method){
 Verity.prototype.expectStatus = function (code) {
   this._expectedStatus = code;
   return this;
+};
+
+
+Verity.prototype.request = function(options, cb){
+  options = options || {};
+  var that = this;
+  var method = options.method || this._method;
+  var url = options.url || this.uri.toString();
+  var body = options.body || this._body;
+  var headers = options.headers || this.headers;
+  this.client(options, function(err, response, body){
+    if (err){
+      return cb(err);
+    }
+    var cookies = response.headers['set-cookie'] || [];
+    var expected = cookies.length;
+    if (expected === 0){
+      return cb(err, response, body);
+    }
+    var doneSetting = function(err){
+     expected -= 1;
+     if (expected === 0){
+       return cb(err, response, body);
+     }
+    };
+    cookies.forEach(function(cookie){
+      that.setCookieFromString(cookie, doneSetting);
+    });
+  });
 };
 
 var getCookiesFromResponse = function(res){
@@ -108,7 +138,6 @@ var cookieStringToObject = function(str){
       obj[pieces[0]] = pieces[1];
       if (pieces[0] == "Secure"){
         obj[pieces[0]] = true;
-        
       }
     }
   });
@@ -130,11 +159,40 @@ Verity.prototype.authStrategy = function(creds, cb){
 };
 Verity.prototype.login = function(creds){
   this.creds = creds;
+  this._mustlogin = true;
   return this;
+};
+
+
+Verity.prototype.setCookieFromString = function(str, cb){
+  var that = this;
+  var cookie = request.cookie(str);
+  this.cookieJar.setCookie(cookie, '/', {}, function(err){
+    that.cookieJar.getCookies('/', {}, function(err, cookies){
+      cb(err);
+    });
+  
+  });
+  /*
+  console.log("cookie set from: ", str);
+  this.cookieJar.setCookie(str, '/', {}, function(err){
+    console.log("set err: ", err);
+    that.cookieJar.getCookies('/', {}, function(err, cookies){
+      console.log("err: ", err);
+      console.log("cookies: ", cookies);
+      cb(err);
+    });
+  });
+  */
 };
 
 Verity.prototype.expectCookie = function(name, value){
   this._expectedCookies[name] = value;
+  return this;
+};
+
+Verity.prototype.setAuthStrategy = function(strategy){
+  this.authStrategy = strategy;
   return this;
 };
 
@@ -154,7 +212,7 @@ Verity.prototype.test = function(cb){
     }
   }
   var that = this;
-  if (this.creds){
+  if (this.creds && this._mustlogin){
     this.authStrategy(this.creds, function(){
       makeRequest(that, options, cb);
     });
@@ -244,11 +302,20 @@ var makeRequest = function(that, options, cb){
     var cookieErrors = [];
     for(var cookieKey in that._expectedCookies){
       var cookieVal = that._expectedCookies[cookieKey];
-      try {
-        expect(that.cookies[cookieKey].value).to.equal(cookieVal);
-      } catch(ex){
-        cookieErrors.push(ex);
+      var errObj = {key : cookieKey};
+      if (!that.cookies[cookieKey]){
+        errObj.message = "expected but missing";
+        cookieErrors.push(errObj);
         failed = true;
+      } else {
+        try {
+          expect(that.cookies[cookieKey].value).to.equal(cookieVal);
+        } catch(ex){
+          errObj.message = ex.message;
+          errObj.detail = ex;
+          cookieErrors.push(errObj);
+          failed = true;
+        }
       }
     }
     if (_.keys(that._expectedCookies).length !== 0){

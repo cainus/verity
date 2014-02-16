@@ -40,6 +40,8 @@
     "urlgrey": "0.3.2",
     "superagent": "~0.16.0",
     "JSONPath": "~0.9.1",
-    "underscore": "~1.5.2"
+    "underscore": "~1.5.2",
+    "requestify": "~0.1.16",
+    "jsondiffpatch": "0.0.11"
   }
 }

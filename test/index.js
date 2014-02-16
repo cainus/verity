@@ -5,6 +5,21 @@ var deepEqual = require('deep-equal');
 var difflet = require('difflet');
 var assert = require('assert');
 var util = require('util');
+var request = require('request');
+var jsondiffpatch = require('jsondiffpatch');
+
+
+var failOnError = function(err){
+  if (err){
+    console.error("");
+    console.error("unexpected error: ", (err.message || err));
+    console.error(err);
+    console.error(new Error().stack);
+    console.error("");
+    throw "unexpected error: " + JSON.stringify((err.message || err));
+  }
+};
+
 
 var assertObjectEquals = function assertObjectEquals(actual, expected){
   if (!deepEqual(actual, expected)){
@@ -16,6 +31,9 @@ var assertObjectEquals = function assertObjectEquals(actual, expected){
     console.log(prettyJson(actual));
     console.log("\n\nexpected");
     console.log(prettyJson(expected));
+    console.log("\n\n");
+    console.log('jsonDiff');
+    console.log(JSON.stringify(jsondiffpatch.diff(actual, expected), null, 2));
     console.log("\n\n");
     assert.fail(actual, expected);
     return false;
@@ -30,9 +48,16 @@ describe('verity', function(){
     var express = require('express');
     var app = express();
     app.use(express.cookieParser('SECRET'));
+    app.use(express.urlencoded());
 
     app.get('/simpleGET', function(req, res){
       res.send('hello world');
+    });
+    app.post('/login', function(req, res){
+      expect(req.body.username).to.equal("gregg");
+      expect(req.body.password).to.equal("password");
+      res.cookie('loggedIn', true);
+      res.send("you're logged in");
     });
 
     app.get('/someJson', function(req, res){
@@ -40,7 +65,6 @@ describe('verity', function(){
     });
 
     app.get('/echoCookies', function(req, res){
-      console.log("server detected cookies: ", req.cookies);
       res.send({gotCookies:req.cookies});
     });
 
@@ -61,6 +85,36 @@ describe('verity', function(){
     server.close(done);
   });
 
+  it("can log a user in, if there's an authstrategy", function(done){
+    var v = verity('http://localhost:3000/cookies');
+    v.
+      setAuthStrategy(function(creds, cb){
+        v.request({  url : 'http://localhost:3000/login/',
+                    body : 'username=' +
+                              creds.login +
+                              '&password=' +
+                              creds.password,
+                    method : 'POST',
+                    headers : {
+                      'content-type' : 'application/x-www-form-urlencoded'
+                    }
+                      }, function(err, response, body){
+                          failOnError(err);
+                          expect(body).to.equal("you're logged in");
+                          expect(response.headers['set-cookie'][0]).
+                            to.equal('loggedIn=true; Path=/');
+                          cb(err);
+                   });
+      }).
+      login({login:'gregg', password:'password'}).
+      expectStatus(200).
+      jsonMode().
+      expectBody({gotCookies:{loggedIn:"true"}}).
+      test(function(err, result){
+        failOnError(err);
+        done();
+      });
+  });
   it("can do a simple GET with 200", function(done){
     verity('http://localhost:3000/simpleGET').
       expectStatus(200).
@@ -108,8 +162,7 @@ describe('verity', function(){
         expect(err.message).to.be('Expectations failed');
         delete result.headers.actual.date;
           //date header changes too much to test easily
-        assertObjectEquals(result,
-          {
+        var expected = {
             status : {
               actual : 404,
               expected : 200
@@ -133,7 +186,8 @@ describe('verity', function(){
                   }
                 ]
             }
-        });
+        };
+        expect(JSON.stringify(result)).to.eql(JSON.stringify(expected));
         done();
       });
   });
@@ -157,8 +211,7 @@ describe('verity', function(){
         delete result.headers.actual.date;
           //date header changes too much to test easily
         expect(err.message).to.be('Expectations failed');
-        assertObjectEquals(result,
-          {
+        var expected = {
             status : {
               actual : 200,
               expected : 200
@@ -192,7 +245,8 @@ describe('verity', function(){
                 ]
               }
 
-        });
+        };
+        expect(JSON.stringify(result)).to.eql(JSON.stringify(expected));
         done();
       });
   });
@@ -240,3 +294,5 @@ describe('verity', function(){
     });
   });
 });
+
+
