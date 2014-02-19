@@ -159,7 +159,7 @@ describe('verity', function(){
       expectBody('hello world').
       log(false).
       test(function(err, result){
-        expect(err.message).to.be('Expectations failed');
+        expect(err.message).to.be('Expectations failed: status: (actual) 404 != (expected) 200');
         delete result.headers.actual.date;
           //date header changes too much to test easily
         var expected = {
@@ -210,7 +210,7 @@ describe('verity', function(){
       test(function(err, result){
         delete result.headers.actual.date;
           //date header changes too much to test easily
-        expect(err.message).to.be('Expectations failed');
+        expect(err.message).to.be("Expectations failed: body didn't match expectations.");
         var expected = {
             status : {
               actual : 200,
@@ -259,7 +259,7 @@ describe('verity', function(){
           expectStatus(200).
           checkBody({asdf:'asdf'}).
           test(function(err, result){
-            expect(err.message).to.equal('Expectations failed');
+            expect(err.message).to.be("Expectations failed: body didn't match expectations.");
             expect(result.body.errors.length).to.equal(1);
             var error = result.body.errors[0];
             expect(error.message).
@@ -284,7 +284,7 @@ describe('verity', function(){
             expect(body.asdf).to.equal("asdf");
           }).
           test(function(err, result){
-            expect(err.message).to.equal('Expectations failed');
+            expect(err.message).to.be("Expectations failed: body didn't match expectations.");
             expect(result.body.errors.length).to.equal(1);
             expect(result.body.errors[0].message).
               to.equal("expected undefined to equal \'asdf\'");

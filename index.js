@@ -37,7 +37,7 @@ var Verity = function(uri, _method){
   });
   this.headers = {};
   this.cookies = {};
-  this.shouldLog = false;
+  this.shouldLog = true;
   this.expectedBody = null;
   this._expectedStatus = 200;
   this._expectedCookies = {};
@@ -148,11 +148,6 @@ Verity.prototype.expectHeader = function(name, value){
   this._expectedHeaders[name] = value;
   return this;
 };
-Verity.prototype.jsonMode = function(){
-  this.expectHeader('content-type', 'application/json');
-  this.jsonModeOn = true;
-  return this;
-};
 Verity.prototype.authStrategy = function(creds, cb){
   // replace this with a function that logs the user in
   return cb(null);
@@ -198,14 +193,16 @@ Verity.prototype.setAuthStrategy = function(strategy){
 
 Verity.prototype.test = function(cb){
   this.message = '';
-  var options = { headers : this.headers};
+  var options = { headers : this.headers };
   options.method = this._method.toLowerCase();
   options.url = this.uri.toString();
   if (!!this._body){
     if (this.jsonModeOn){
-      options.headers['content-type'] = 'application/json';
-      if (!isString(this._body)){
-        options.body = JSON.stringify(this._body);
+      if (options.method !== 'GET'){
+        options.headers['content-type'] = 'application/json';
+        if (!isString(this._body)){
+          options.body = JSON.stringify(this._body);
+        }
       }
     } else {
       options.body = this._body;
@@ -213,6 +210,9 @@ Verity.prototype.test = function(cb){
   }
   var that = this;
   if (this.creds && this._mustlogin){
+    if (!this.authStrategy){
+      throw "can't login with no auth strategy";
+    }
     this.authStrategy(this.creds, function(){
       makeRequest(that, options, cb);
     });
@@ -225,7 +225,7 @@ Verity.prototype.test = function(cb){
 Verity.prototype.reset = function(){
   this.bodyChecks = [];
   this._body = '';
-  this._headers = {};
+  this.headers = {};
   this._expectedCookies = {};
   this._expectedHeaders = {};
   this._expectedStatus = 200;
@@ -233,6 +233,10 @@ Verity.prototype.reset = function(){
 };
 
 var makeRequest = function(that, options, cb){
+  if (that.debugMode){
+    console.log("REQUEST: ");
+    console.log(options);
+  }
   // options will have : headers, method, url, body
   that.creds = null;  // forget that we know how to log in
   /*
@@ -267,12 +271,14 @@ var makeRequest = function(that, options, cb){
     }
     
     var failed = false;
+    var shortMessage = '';
 
 
     // statusCode stuff
     result.status.actual = response.statusCode;
     result.status.expected = that._expectedStatus;
     if (response.statusCode != that._expectedStatus){
+      shortMessage = "status: (actual) " + response.statusCode + ' != (expected) ' + that._expectedStatus;
       failed = true;
     }
 
@@ -288,6 +294,9 @@ var makeRequest = function(that, options, cb){
         try {
           expect(response.headers[k]).to.equal(v);
         } catch (ex){
+          if (!shortMessage){
+            shortMessage = "headers didn't match expectations.";
+          }
           headerErrors.push(ex);
         }
       }
@@ -311,6 +320,9 @@ var makeRequest = function(that, options, cb){
         try {
           expect(that.cookies[cookieKey].value).to.equal(cookieVal);
         } catch(ex){
+          if (!shortMessage){
+            shortMessage = "cookies didn't match expectations.";
+          }
           errObj.message = ex.message;
           errObj.detail = ex;
           cookieErrors.push(errObj);
@@ -330,6 +342,9 @@ var makeRequest = function(that, options, cb){
     result.body.errors = [];
     result.body.errors = getBodyErrors(that, body);
     if (result.body.errors.length > 0){
+      if (!shortMessage){
+        shortMessage = "body didn't match expectations.";
+      }
       failed = true;
     }
 
@@ -337,7 +352,10 @@ var makeRequest = function(that, options, cb){
       prettyDiff(result);
     }
     if (failed){
-      return cb(new Error('Expectations failed'), result);
+      if (!that.shouldLog){
+        console.log("should log was falsey");
+      }
+      return cb(new Error('Expectations failed: ' + shortMessage), result);
     }
     that.reset();
     return cb(null, result);
@@ -367,6 +385,7 @@ Verity.prototype.checkBody = function(description, fnTest){
     description = '';
   }
   if (!isFunction(fnTest)){
+    this.bodyChecks = [];
     var expected = fnTest;
     fnTest = function(body){
       assertObjectEquals(body, expected);
@@ -389,9 +408,21 @@ var prettyDiff = function (result){
       console.log(prettyJson({actual : error.actual, expected : error.expected}));
       console.log(error.colorDiff);
     });
+  } else {
+    console.log('BODY: \n', prettyJson(result.body));
   }
   console.log('HEADERS: \n', prettyJson(result.headers));
   console.log('STATUS: \n', prettyJson(result.status));
+};
+
+Verity.prototype.jsonMode = function(modeOn){
+  if (modeOn !== false){
+    this.jsonModeOn = true;
+    this.expectHeader('content-type', 'application/json');
+  } else {
+    this.jsonModeOn = false;
+  }
+  return this;
 };
 
 Verity.prototype.log = function(shouldLog){
@@ -399,6 +430,15 @@ Verity.prototype.log = function(shouldLog){
     this.shouldLog = true;
   } else {
     this.shouldLog = false;
+  }
+  return this;
+};
+
+Verity.prototype.debug = function(shouldLog){
+  if (shouldLog !== false){
+    this.debugMode = true;
+  } else {
+    this.debugMode = false;
   }
   return this;
 };
