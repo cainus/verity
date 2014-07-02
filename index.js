@@ -398,7 +398,7 @@ Verity.prototype.checkPartialBody = function(description, fnTest) {
   this.bodyChecks.push({ message : description,
                          fnTest : fnTest });
   return this;
-}
+};
 
 Verity.prototype.checkBody = function(description, fnTest){
   // each call adds an assertion to the body assertions
@@ -509,7 +509,7 @@ var isSubset = function(a, b) {
   var bPrime;
   bPrime = deepmerge(a, b);
   if(!deepequal(bPrime, b)) {
-    throw new Error("ObjectPartialAssertionError")
+    throw new Error("ObjectPartialAssertionError");
   }
 };
 

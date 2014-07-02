@@ -81,3 +81,5 @@ TODO document
 `assertObjectEquals()` is a static method on the verity object that can be used in general to assert that two objects are deeply-equal, and to throw an assertion error if they're not, along with logging the diffs.
 
 TODO document use in mocha.  document use in other test frameworks.
+
+TODO document changing the url
