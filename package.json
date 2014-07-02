@@ -1,6 +1,6 @@
 {
   "name": "verity",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "a lib for testing for http request/response",
   "main": "index.js",
   "scripts": {
@@ -42,6 +42,8 @@
     "JSONPath": "~0.9.1",
     "underscore": "~1.5.2",
     "requestify": "~0.1.16",
-    "jsondiffpatch": "0.0.11"
+    "jsondiffpatch": "0.0.11",
+    "deep-equal": "0.2.1",
+    "deepmerge": "0.2.7"
   }
 }

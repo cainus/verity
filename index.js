@@ -11,6 +11,10 @@ var assert = require('assert');
 var _ = require('underscore');
 var requestify = require('requestify');
 
+var deepequal = require("deep-equal");
+var deepmerge = require("deepmerge");
+
+
 var isString = function(str){
   return toString.call(str) == '[object String]';
 };
@@ -376,6 +380,26 @@ var getBodyErrors = function(v, body){
   return errors;
 };
 
+Verity.prototype.checkPartialBody = function(description, fnTest) {
+  // each call adds an assertion to the body assertions
+  // fnTest should throw an assert error
+  // optionalJsonPath is optional
+  if (!fnTest){
+    fnTest = description;
+    description = '';
+  }
+  if (!isFunction(fnTest)){
+    this.bodyChecks = [];
+    var expected = fnTest;
+    fnTest = function(body){
+      isSubset(expected, body);
+    };
+  }
+  this.bodyChecks.push({ message : description,
+                         fnTest : fnTest });
+  return this;
+}
+
 Verity.prototype.checkBody = function(description, fnTest){
   // each call adds an assertion to the body assertions
   // fnTest should throw an assert error
@@ -398,6 +422,10 @@ Verity.prototype.checkBody = function(description, fnTest){
 
 Verity.prototype.expectBody = function(body){
   return this.checkBody(body);
+};
+
+Verity.prototype.expectPartialBody = function(partialBody) {
+  return this.checkPartialBody(partialBody);
 };
 
 // format the diff better
@@ -463,7 +491,28 @@ var assertObjectEquals = function (actual, expected){
     throw err;
   }
 };
-  
+
+/*
+  Tests if object a is a subset of object b.
+
+  Easiest way to do this is
+
+    b' = deepmerge(a, b)
+    return equal(b', b)
+
+  Will not necessarily work if any values are arrays
+  of elements, since the arrays would need to be in
+  sorted order. Unclear what that means for arrays
+  of objects.
+ */
+var isSubset = function(a, b) {
+  var bPrime;
+  bPrime = deepmerge(a, b);
+  if(!deepequal(bPrime, b)) {
+    throw new Error("ObjectPartialAssertionError")
+  }
+};
+
 var prettyJson = function(obj){
   return JSON.stringify(obj, null, 2);
 };
