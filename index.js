@@ -64,6 +64,15 @@ Verity.prototype.method = function(method){
   return this;
 };
 
+Verity.prototype.header = function(name, value){
+  if (value === null){
+    delete this.headers[name];
+  } else {
+    this.headers[name] = value;
+  }
+  return this;
+};
+
 Verity.prototype.expectStatus = function (code) {
   this._expectedStatus = code;
   return this;

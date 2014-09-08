@@ -53,6 +53,9 @@ describe('verity', function(){
     app.get('/simpleGET', function(req, res){
       res.send('hello world');
     });
+    app.get('/headers', function(req, res){
+      res.send(req.headers);
+    });
     app.post('/login', function(req, res){
       expect(req.body.username).to.equal("gregg");
       expect(req.body.password).to.equal("password");
@@ -200,6 +203,20 @@ describe('verity', function(){
         expect(err).to.be(null);
         done();
       });
+  });
+  it("can send headers", function(done){
+    verity('http://localhost:3000/headers').
+      jsonMode().
+      header("X-Forwarded-Proto", 'https').
+      expectBody({
+        "x-forwarded-proto":"https",
+        "host":"localhost:3000",
+        "content-length":"0",
+        "connection":"keep-alive"
+      }).
+      expectStatus(200).
+      //log(false).
+      test(done);
   });
   it("can do a json GET with incorrect json", function(done){
     verity('http://localhost:3000/someJson').

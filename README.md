@@ -47,7 +47,8 @@ Call `body()` to set the contents of the request body.  This should be a string 
 Call `method()` with an HTTP method to set the HTTP request method.
 
 ####header(name, value)
-TODO.  not yet implemented
+Call `header()` with a header name and value to set a single http
+request header.
 
 ####setCookieFromString(String)
 Call `setCookieFromString()' to pass a cookie string to set the cookie values of the request.
