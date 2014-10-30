@@ -328,6 +328,7 @@ var makeRequest = function(that, options, cb){
     result.headers.expected = that._expectedHeaders;
     if (headerErrors.length > 0){
       result.headers.errors = headerErrors;
+      failed = true;
     }
 
     // cookie stuff
