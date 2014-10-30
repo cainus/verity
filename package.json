@@ -1,6 +1,6 @@
 {
   "name": "verity",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "a lib for testing for http request/response",
   "main": "index.js",
   "scripts": {
@@ -19,6 +19,9 @@
     "requests"
   ],
   "author": "Gregg Caines",
+  "contributors": [
+    "Peter Hayes"
+  ],
   "license": "BSD-2-Clause",
   "bugs": {
     "url": "https://github.com/cainus/verity/issues"

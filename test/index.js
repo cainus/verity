@@ -63,6 +63,10 @@ describe('verity', function(){
       res.send("you're logged in");
     });
 
+    app.get('/redirect', function(req, res) {
+      res.redirect("/simpleGET");
+    });
+
     app.get('/someJson', function(req, res){
       res.send({"test":"test"});
     });
@@ -216,6 +220,19 @@ describe('verity', function(){
       }).
       expectStatus(200).
       //log(false).
+      test(done);
+  });
+  it("can follow redirects", function(done) {
+    verity("http://localhost:3000/redirect").
+      followRedirect().
+      expectStatus(200).
+      expectBody("hello world").
+      test(done);
+  });
+  it("can not follow redirects", function(done) {
+    verity("http://localhost:3000/redirect").
+      expectStatus(302).
+      expectHeader("location", "/simpleGET").
       test(done);
   });
   it("can do a json GET with incorrect json", function(done){

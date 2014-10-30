@@ -204,6 +204,15 @@ Verity.prototype.setAuthStrategy = function(strategy){
   return this;
 };
 
+Verity.prototype.followRedirect = function(val) {
+  if (val === false) {
+    this._followRedirect = false;
+  } else {
+    this._followRedirect = true;
+  }
+  return this;
+};
+
 Verity.prototype.test = function(cb){
   this.message = '';
   var options = { headers : this.headers };
@@ -221,6 +230,7 @@ Verity.prototype.test = function(cb){
       options.body = this._body;
     }
   }
+  options.followRedirect = !!this._followRedirect;
   var that = this;
   if (this.creds && this._mustlogin){
     if (!this.authStrategy){
