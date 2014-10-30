@@ -19,6 +19,9 @@
     "requests"
   ],
   "author": "Gregg Caines",
+  "contributors": [
+    "Peter Hayes"
+  ],
   "license": "BSD-2-Clause",
   "bugs": {
     "url": "https://github.com/cainus/verity/issues"
