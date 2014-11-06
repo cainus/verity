@@ -126,6 +126,7 @@ describe('verity', function(){
     verity('http://localhost:3000/simpleGET').
       expectStatus(200).
       expectBody('hello world').
+      log(false).
       test(done);
   });
   it("can get cookies and verify them", function(done){
@@ -133,11 +134,10 @@ describe('verity', function(){
       expectStatus(200).
       jsonMode().
       log(false).
-      expectCookie("name", "todu").
+      expectCookies({"name": "todu"}).
       expectBody({gotCookies:{}}).
       test(function(err, result){
-        expect(result.cookies.errors[0].message).
-          to.eql("expected 'tobi' to equal 'todu'");
+        expect(result.errors).to.have.property("Cookies");
         done();
       });
   });
@@ -146,7 +146,7 @@ describe('verity', function(){
     v.expectStatus(200).
       jsonMode().
       log(true).
-      expectCookie("name", "tobi").
+      expectCookies({"name": "tobi"}).
       expectBody({gotCookies:{}}).
       test(function(err, result){
         expect(err).
@@ -166,35 +166,34 @@ describe('verity', function(){
       expectBody('hello world').
       log(false).
       test(function(err, result){
-        expect(err.message).to.be('Expectations failed: status: (actual) 404 != (expected) 200');
-        delete result.headers.actual.date;
+        expect(err.message).to.be('Expectiations failed: Status, Body');
           //date header changes too much to test easily
+        delete result.headers.date;
         var expected = {
-            status : {
-              actual : 404,
-              expected : 200
+          "errors": {
+            "Status": {
+              "actual": 404,
+              "expected": 200,
+              "error": "Expected status 404 but got 200"
             },
-            headers : {
-              actual: { 
-                'x-powered-by': 'Express',
-                'content-type': 'text/html',
-                connection: 'keep-alive',
-                'transfer-encoding': 'chunked'
-              },
-              expected : {}
-            },
-            body : {
-              actual : 'Cannot GET /doesNotExist\n',
-              errors: [
-                  {
-                    "actual": "Cannot GET /doesNotExist\n",
-                    "expected": "hello world",
-                    "colorDiff": "\u001b[34m\u001b[1m\"hello world\"\u001b[0m"
-                  }
-                ]
+            "Body": {
+              "actual": "Cannot GET /doesNotExist\n",
+              "expected": "hello world",
+              "colorDiff": "\u001b[34m\u001b[1m\"hello world\"\u001b[0m",
+              "error": "ObjectEqualityAssertionError"
             }
+          },
+          "status": 404,
+          "headers": {
+            "x-powered-by": "Express",
+            "content-type": "text/html",
+            "connection": "keep-alive",
+            "transfer-encoding": "chunked"
+          },
+          "cookies": {},
+          "body": "Cannot GET /doesNotExist\n"
         };
-        expect(JSON.stringify(result)).to.eql(JSON.stringify(expected));
+        expect(JSON.stringify(result)).to.equal(JSON.stringify(expected));
         done();
       });
   });
@@ -232,7 +231,7 @@ describe('verity', function(){
   it("can not follow redirects", function(done) {
     verity("http://localhost:3000/redirect").
       expectStatus(302).
-      expectHeader("location", "/simpleGET").
+      expectHeaders({"location": "/simpleGET"}).
       test(done);
   });
   it("can do a json GET with incorrect json", function(done){
@@ -242,93 +241,39 @@ describe('verity', function(){
       expectBody({"asdf":"asdf"}).
       log(false).
       test(function(err, result){
-        delete result.headers.actual.date;
-          //date header changes too much to test easily
-        expect(err.message).to.be("Expectations failed: body didn't match expectations.");
+        //date header changes too much to test easily
+        delete result.headers.date;
+        expect(err.message).to.be("Expectiations failed: Body");
         var expected = {
-            status : {
-              actual : 200,
-              expected : 200
-            },
-            headers : {
-              actual: { 
-                'x-powered-by': 'Express',
-                'content-type': 'application/json; charset=utf-8',
-                'content-length': '20',
-                etag: '"-1526328376"',
-                connection: 'keep-alive',
+          "errors": {
+            "Body": {
+              "actual": {
+                "test": "test"
               },
-              expected :  { 
-                'content-type': 'application/json' 
-              }
-            },
-            body: {
-                actual: {
-                  test: "test"
-                },
-                errors: [
-                  {
-                    actual: {
-                      "test": "test"
-                    },
-                    expected: {
-                      "asdf": "asdf"
-                    },
-                    colorDiff: "{\u001b[32m\u001b[1m\"asdf\":\"asdf\"\u001b[0m,\u001b[31m\u001b[1m\"test\":\"test\"\u001b[0m}"
-                  }
-                ]
-              }
-
+              "expected": {
+                "asdf": "asdf"
+              },
+              "colorDiff": "{\u001b[32m\u001b[1m\"asdf\":\"asdf\"\u001b[0m,\u001b[31m\u001b[1m\"test\":\"test\"\u001b[0m}",
+              "error": "ObjectEqualityAssertionError"
+            }
+          },
+          "status": 200,
+          "headers": {
+            "x-powered-by": "Express",
+            "content-type": "application/json; charset=utf-8",
+            "content-length": "20",
+            "etag": "\"-1526328376\"",
+            "connection": "keep-alive"
+          },
+          "cookies": {},
+          "body": {
+            "test": "test"
+          }
         };
         expect(JSON.stringify(result)).to.eql(JSON.stringify(expected));
         done();
       });
   });
-
-  describe("expectBody", function(){
-    describe("with a non-function", function(){
-      it("can find errors", function(done){
-        verity('http://localhost:3000/someJson').
-          jsonMode().
-          log(false).
-          expectStatus(200).
-          expectBody({asdf:'asdf'}).
-          test(function(err, result){
-            expect(err.message).to.be("Expectations failed: body didn't match expectations.");
-            expect(result.body.errors.length).to.equal(1);
-            var error = result.body.errors[0];
-            expect(error.message).
-              to.equal("ObjectEqualityAssertionError");
-            expect(error.actual).
-              to.eql({test:'test'});
-            expect(error.expected).
-              to.eql({asdf:'asdf'});
-            expect(error.colorDiff).
-              to.eql('{\u001b[32m\u001b[1m"asdf":"asdf"\u001b[0m,\u001b[31m\u001b[1m"test":"test"\u001b[0m}');
-            done();
-          });
-      });
-    });
-    describe("with a function", function(){
-      it("can find errors", function(done){
-        verity('http://localhost:3000/someJson').
-          jsonMode().
-          log(false).
-          expectStatus(200).
-          expectBody(function(body){
-            expect(body.asdf).to.equal("asdf");
-          }).
-          test(function(err, result){
-            expect(err.message).to.be("Expectations failed: body didn't match expectations.");
-            expect(result.body.errors.length).to.equal(1);
-            expect(result.body.errors[0].message).
-              to.equal("expected undefined to equal \'asdf\'");
-            done();
-          });
-      });
-    });
-  });
-
 });
 
 
