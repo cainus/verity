@@ -284,14 +284,15 @@ describe('verity', function(){
         done();
       });
   });
-  describe("checkBody", function(){
+
+  describe("expectBody", function(){
     describe("with a non-function", function(){
       it("can find errors", function(done){
         verity('http://localhost:3000/someJson').
           jsonMode().
           log(false).
           expectStatus(200).
-          checkBody({asdf:'asdf'}).
+          expectBody({asdf:'asdf'}).
           test(function(err, result){
             expect(err.message).to.be("Expectations failed: body didn't match expectations.");
             expect(result.body.errors.length).to.equal(1);
@@ -314,7 +315,7 @@ describe('verity', function(){
           jsonMode().
           log(false).
           expectStatus(200).
-          checkBody(function(body){
+          expectBody(function(body){
             expect(body.asdf).to.equal("asdf");
           }).
           test(function(err, result){
@@ -327,6 +328,14 @@ describe('verity', function(){
       });
     });
   });
+
 });
+
+
+
+
+
+
+
 
 

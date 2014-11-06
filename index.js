@@ -51,8 +51,24 @@ var Verity = function(uri, _method){
   this.response = {};
   this.jsonModeOn = false;
   this.message = '';
+
+  this._expectations = [];
 };
 
+/*
+  Setup methods - called before the request.
+*/
+
+// TODO make sure this gets called
+Verity.prototype.reset = function(){
+  this.bodyChecks = [];
+  this._body = '';
+  this.headers = {};
+  this._expectedCookies = {};
+  this._expectedHeaders = {};
+  this._expectedStatus = 200;
+  this._expectedBodyTesters = [];
+};
 
 Verity.prototype.body = function(body){
   this._body = body;
@@ -73,11 +89,78 @@ Verity.prototype.header = function(name, value){
   return this;
 };
 
-Verity.prototype.expectStatus = function (code) {
-  this._expectedStatus = code;
+Verity.prototype.expectHeader = function(name, value){
+  this._expectedHeaders[name] = value;
   return this;
 };
 
+Verity.prototype.authStrategy = function(creds, cb){
+  // replace this with a function that logs the user in
+  return cb(null);
+};
+Verity.prototype.login = function(creds){
+  this.creds = creds;
+  this._mustlogin = true;
+  return this;
+};
+
+Verity.prototype.followRedirect = function(val) {
+  if (val === false) {
+    this._followRedirect = false;
+  } else {
+    this._followRedirect = true;
+  }
+  return this;
+};
+
+Verity.prototype.setAuthStrategy = function(strategy){
+  this.authStrategy = strategy;
+  return this;
+};
+
+
+Verity.prototype.setCookieFromString = function(str, cb){
+  var that = this;
+  var cookie = request.cookie(str);
+  this.cookieJar.setCookie(cookie, '/', {}, function(err){
+    that.cookieJar.getCookies('/', {}, function(err, cookies){
+      cb(err);
+    });
+  
+  });
+};
+
+Verity.prototype.jsonMode = function(modeOn){
+  if (modeOn !== false){
+    this.jsonModeOn = true;
+    this.expectHeader('content-type', 'application/json');
+  } else {
+    this.jsonModeOn = false;
+  }
+  return this;
+};
+
+Verity.prototype.log = function(shouldLog){
+  if (shouldLog !== false){
+    this.shouldLog = true;
+  } else {
+    this.shouldLog = false;
+  }
+  return this;
+};
+
+Verity.prototype.debug = function(shouldLog){
+  if (shouldLog !== false){
+    this.debugMode = true;
+  } else {
+    this.debugMode = false;
+  }
+  return this;
+};
+
+/*
+  Execution methods - to make our request.
+*/
 
 Verity.prototype.request = function(options, cb){
   options = options || {};
@@ -107,112 +190,6 @@ Verity.prototype.request = function(options, cb){
   });
 };
 
-var getCookiesFromResponse = function(res){
-  var cookies = {};
-  if (res.headers['set-cookie']){
-    res.headers['set-cookie'].forEach(function(cookie){
-      cookie = cookieStringToObject(cookie);
-      if (cookie.value === ''){
-        delete cookies[cookie.name];
-      } else {
-        cookies[cookie.name] = cookie;
-      }
-    });
-  }
-  return cookies;
-};
-
-var cookieObjectToString = function(obj){
-  var pairs = [obj.name + '=' + obj.value];
-  for(var k in obj){
-    if (k !== 'name' && k !== 'value'){
-      pairs.push(k + '=' + obj[k]);
-    }
-  }
-  var str = pairs.join('; ');
-  return str;
-};
-
-var cookieStringToObject = function(str){
-  var obj = {};
-  var pairs = str.toString().split(";");
-  pairs.forEach(function(pair){
-    var pieces = pair.trim().split('=');
-    pieces = pieces.map(function(str){
-      return str.trim();
-    });
-    var key = [
-      "Domain", "Path", "Expires", "Secure"
-    ];
-    if (key.indexOf(pieces[0]) === -1){
-      obj.name = pieces[0];
-      obj.value = pieces[1];
-    } else {
-      obj[pieces[0]] = pieces[1];
-      if (pieces[0] == "Secure"){
-        obj[pieces[0]] = true;
-      }
-    }
-  });
-  return obj;
-};
-
-Verity.prototype.expectHeader = function(name, value){
-  this._expectedHeaders[name] = value;
-  return this;
-};
-Verity.prototype.authStrategy = function(creds, cb){
-  // replace this with a function that logs the user in
-  return cb(null);
-};
-Verity.prototype.login = function(creds){
-  this.creds = creds;
-  this._mustlogin = true;
-  return this;
-};
-
-
-Verity.prototype.setCookieFromString = function(str, cb){
-  var that = this;
-  var cookie = request.cookie(str);
-  this.cookieJar.setCookie(cookie, '/', {}, function(err){
-    that.cookieJar.getCookies('/', {}, function(err, cookies){
-      cb(err);
-    });
-  
-  });
-  /*
-  console.log("cookie set from: ", str);
-  this.cookieJar.setCookie(str, '/', {}, function(err){
-    console.log("set err: ", err);
-    that.cookieJar.getCookies('/', {}, function(err, cookies){
-      console.log("err: ", err);
-      console.log("cookies: ", cookies);
-      cb(err);
-    });
-  });
-  */
-};
-
-Verity.prototype.expectCookie = function(name, value){
-  this._expectedCookies[name] = value;
-  return this;
-};
-
-Verity.prototype.setAuthStrategy = function(strategy){
-  this.authStrategy = strategy;
-  return this;
-};
-
-Verity.prototype.followRedirect = function(val) {
-  if (val === false) {
-    this._followRedirect = false;
-  } else {
-    this._followRedirect = true;
-  }
-  return this;
-};
-
 Verity.prototype.test = function(cb){
   this.message = '';
   var options = { headers : this.headers };
@@ -237,25 +214,14 @@ Verity.prototype.test = function(cb){
       throw "can't login with no auth strategy";
     }
     this.authStrategy(this.creds, function(){
-      makeRequest(that, options, cb);
+      makeRequestAndTest(that, options, cb);
     });
   } else {
-    makeRequest(that, options, cb);
+    makeRequestAndTest(that, options, cb);
   }
 };
 
-// TODO make sure this gets called
-Verity.prototype.reset = function(){
-  this.bodyChecks = [];
-  this._body = '';
-  this.headers = {};
-  this._expectedCookies = {};
-  this._expectedHeaders = {};
-  this._expectedStatus = 200;
-  this._expectedBodyTesters = [];
-};
-
-var makeRequest = function(that, options, cb){
+var makeRequestAndTest = function(that, options, cb){
   if (that.debugMode){
     console.log("REQUEST: ");
     console.log(options);
@@ -284,6 +250,7 @@ var makeRequest = function(that, options, cb){
       headers : {},
       body : {}
     };
+
     if (that.jsonModeOn){
       try {
         body = JSON.parse(body);
@@ -364,7 +331,7 @@ var makeRequest = function(that, options, cb){
     // body stuff
     result.body.actual = body;
     result.body.errors = [];
-    result.body.errors = getBodyErrors(that, body);
+    result.body.errors = testBody(that, body);
     if (result.body.errors.length > 0){
       if (!shortMessage){
         shortMessage = "body didn't match expectations.";
@@ -387,20 +354,238 @@ var makeRequest = function(that, options, cb){
 
 };
 
-var getBodyErrors = function(v, body){
-  var errors = [];
-  var testBody = body;
-  v.bodyChecks.forEach(function(check){
-    try {
-      check.fnTest(testBody);
-    } catch (ex){
-      errors.push(ex);
+Verity.prototype.newTest = function(cb) {
+  // Reset logging status.
+  this._logBody = true;
+  this._logStatus = true;
+  this._logHeaders = false;
+  this._logCookies = false;
+
+  // Forget how to log in.
+  this.creds = null;
+
+  // Request options.
+  var options = {
+    headers: this.headers,
+    method: this._method.toLowerCase(),
+    url: this.uri.toString(),
+    followRedirect: !!this._followRedirect,
+  };
+  if (!!this._body){
+    if (this.jsonModeOn){
+      if (options.method !== 'GET'){
+        options.headers['content-type'] = 'application/json';
+        if (!isString(this._body)){
+          options.body = JSON.stringify(this._body);
+        }
+      }
+    } else {
+      options.body = this._body;
     }
-  });
-  return errors;
+  }
+
+
+  if (this.creds && this._mustlogin){
+    if (!this.authStrategy){
+      throw "can't login with no auth strategy";
+    }
+    this.authStrategy(this.creds, function(){
+      finishTest.bind(this)(options, cb);
+    });
+  } else {
+    finishTest.bind(this)(options, cb);
+  }
 };
 
-Verity.prototype.checkPartialBody = function(description, fnTest) {
+// Should be bound to a verity instance; never called independently.
+var finishTest = function(options, cb) {
+  this.client(options, (function(err, res) {
+    if (err) {
+      return cb(err)
+    };
+
+    if (this.jsonModeOn){
+      try {
+        res.body = JSON.parse(res.body);
+      } catch(ex){
+        // do nothing if it doesn't parse.
+        // it will stay as a string
+      }
+    }
+
+    var unnamedExpectationCount = 1;
+
+    var errors = {};
+    this._expectations.forEach((function(expectation){
+      try {
+        expectation.fnTest.bind(this)(res);
+      } catch (err) {
+        var description = expectation.description || ("Unnamed Expectation " + unnamedExpectationCount++);
+        errors[description] = err;
+      }
+    }).bind(this))
+
+    var result, err;
+    if (!_.isEmpty(errors)) {
+      var errorNames = Object.keys(errors);
+      if (errorNames.length > 1) {
+        err = new Error(errorNames.slice(0, -1).join(", ") + ", and " + errorNames.slice(-1)[0]);
+      } else {
+        err = new Error(errorNames[0]);
+      }
+
+      result = {
+        errors: errors
+      };
+
+      prettyLog("Errors", errors);
+
+      if (this._logStatus) {
+        result.status = res.statusCode;
+        prettyLog("Status", result.status);
+      }
+      if (this._logHeaders) {
+        result.headers = res.headers;
+        prettyLog("Headers", result.headers);
+      }
+      if (this._logCookies) {
+        result.cookies = this.cookies[name];
+        prettyLog("Cookies", result.cookies);
+      }
+      if (this._logBody) {
+        result.body = res.body;
+        prettyLog("Body", result.body);
+      }
+    }
+    this._expectations = [];
+    return cb(err, result);
+  }).bind(this));
+};
+
+/*
+  Expectation methods - test what was returned.
+*/
+
+Verity.registerExpectMethod = function(key, fnTest) {
+  if (Verity.prototype[key]) {
+    throw new Error("Verity already has a method named " + key);
+  }
+  Verity.prototype[key] = this.expect.bind(this, key, fnTest)
+};
+
+Verity.prototype.expect = function(description, fnTest) {
+  if (!fnTest) {
+    fnTest = description;
+    description = '';
+  }
+  this._expectations.push({description: description, fnTest: fnTest});
+  return this;
+};
+
+Verity.prototype.newExpectStatus = function(expected) {
+  this.expect("Status", function(res) {
+    var actual = res.statusCode;
+    console.log("actual/expected", actual, expected)
+    if (actual !== expected) {
+      var err = new Error(["Expected status", actual, "but got", expected]);
+      err.actual = actual;
+      err.expected = expected;
+      throw err;
+    } else {
+      this._logStatus = false;
+    }
+  });
+  return this;
+};
+
+Verity.prototype.newExpectCookie = function(name, expected) {
+  this.expect("Cookie: " + name, function(res) {
+    this.cookies = _.extend(this.cookies, getCookiesFromResponse(res));
+    var actual = this.cookies[name];
+    if (!actual) {
+      this._logCookies = true;
+      var err = new Error(["Expected cookie", name, "but none was found"].join(" "));
+      err.expected = expected;
+      throw err;
+    } else if (actual !== expected) {
+      this._logCookies = true;
+      var err = new Error(["Expected cookie", name, "to have value", expected, "but got", actual].join(" "));
+      err.actual = actual;
+      err.expected = expected;
+      throw err;
+    }
+  });
+  return this;
+};
+
+Verity.prototype.newExpectHeader = function(name, expected) {
+  this.expect("Header: " + name, function(res) {
+    var actual = res.headers[name];
+    if (name === "content-type") {
+      var reaper = new Reaper();
+      reaper.register(expected);
+      if (!reaper.isAcceptable(actual)) {
+        this._logHeaders = true;
+        var err = new Error(["Expected header", name, "to have value", expected, "but got", actual].join(" "));
+        err.actual = actual;
+        err.expected = expected;
+        throw err;
+      }
+    } else if (!actual) {
+      this._logHeaders = true;
+      var err = new Error(["Expected header", name, "but none was found"].join(" "));
+      err.expected = expected;
+      throw err;
+    } else if (actual !== expected) {
+      this._logHeaders = true;
+      var err = new Error(["Expected header", name, "to have value", expected, "but got", actual].join(" "));
+      err.actual = actual;
+      err.expected = expected;
+      throw err;
+    }
+  });
+  return this;
+};
+
+Verity.prototype.newExpectBody = function(expected) {
+  this.expect("Body", function(res) {
+    try {
+      assertObjectEquals(res.body, expected);
+      this._logBody = false;
+    } catch (err) {
+      err.actual = res.body;
+      err.expected = expected;
+      throw err
+    }
+  });
+  return this;
+};
+
+Verity.prototype.newExpectPartialBody = function(expected) {
+  this.expect("Body", function(res) {
+    try {
+      isSubset(expected, res.body);
+      this._logBody = false;
+    } catch (err) {
+      err.actual = JSON.stringify(res.body, null, 2);
+      err.expected = JSON.stringify(expected, null, 2);
+      throw err
+    }
+  });
+};
+
+Verity.prototype.expectStatus = function (code) {
+  this._expectedStatus = code;
+  return this;
+};
+
+
+Verity.prototype.expectCookie = function(name, value){
+  this._expectedCookies[name] = value;
+  return this;
+};
+
+Verity.prototype.expectPartialBody = function(description, fnTest) {
   // each call adds an assertion to the body assertions
   // fnTest should throw an assert error
   // optionalJsonPath is optional
@@ -420,7 +605,7 @@ Verity.prototype.checkPartialBody = function(description, fnTest) {
   return this;
 };
 
-Verity.prototype.checkBody = function(description, fnTest){
+Verity.prototype.expectBody = function(description, fnTest){
   // each call adds an assertion to the body assertions
   // fnTest should throw an assert error
   // optionalJsonPath is optional
@@ -440,12 +625,80 @@ Verity.prototype.checkBody = function(description, fnTest){
   return this;
 };
 
-Verity.prototype.expectBody = function(body){
-  return this.checkBody(body);
+
+var getCookiesFromResponse = function(res){
+  var cookies = {};
+  if (res.headers['set-cookie']){
+    res.headers['set-cookie'].forEach(function(cookie){
+      cookie = cookieStringToObject(cookie);
+      if (cookie.value === ''){
+        delete cookies[cookie.name];
+      } else {
+        cookies[cookie.name] = cookie;
+      }
+    });
+  }
+  return cookies;
 };
 
-Verity.prototype.expectPartialBody = function(partialBody) {
-  return this.checkPartialBody(partialBody);
+var cookieObjectToString = function(obj){
+  var pairs = [obj.name + '=' + obj.value];
+  for(var k in obj){
+    if (k !== 'name' && k !== 'value'){
+      pairs.push(k + '=' + obj[k]);
+    }
+  }
+  var str = pairs.join('; ');
+  return str;
+};
+
+var cookieStringToObject = function(str){
+  var obj = {};
+  var pairs = str.toString().split(";");
+  pairs.forEach(function(pair){
+    var pieces = pair.trim().split('=');
+    pieces = pieces.map(function(str){
+      return str.trim();
+    });
+    var key = [
+      "Domain", "Path", "Expires", "Secure"
+    ];
+    if (key.indexOf(pieces[0]) === -1){
+      obj.name = pieces[0];
+      obj.value = pieces[1];
+    } else {
+      obj[pieces[0]] = pieces[1];
+      if (pieces[0] == "Secure"){
+        obj[pieces[0]] = true;
+      }
+    }
+  });
+  return obj;
+};
+
+var testExpectations = function(v, res) {
+  v._expectations.forEach(function(expectation) {
+    try {
+      expectation.fnTest(res);
+      expectation.error = null;
+    } catch(ex) {
+      expectation.error = ex;
+    }
+  });
+  return v;
+};
+
+var testBody = function(v, body){
+  var errors = [];
+  var testBody = body;
+  v.bodyChecks.forEach(function(check){
+    try {
+      check.fnTest(testBody);
+    } catch (ex){
+      errors.push(ex);
+    }
+  });
+  return errors;
 };
 
 // format the diff better
@@ -463,33 +716,6 @@ var prettyDiff = function (result){
   console.log('STATUS: \n', prettyJson(result.status));
 };
 
-Verity.prototype.jsonMode = function(modeOn){
-  if (modeOn !== false){
-    this.jsonModeOn = true;
-    this.expectHeader('content-type', 'application/json');
-  } else {
-    this.jsonModeOn = false;
-  }
-  return this;
-};
-
-Verity.prototype.log = function(shouldLog){
-  if (shouldLog !== false){
-    this.shouldLog = true;
-  } else {
-    this.shouldLog = false;
-  }
-  return this;
-};
-
-Verity.prototype.debug = function(shouldLog){
-  if (shouldLog !== false){
-    this.debugMode = true;
-  } else {
-    this.debugMode = false;
-  }
-  return this;
-};
 
 // TODO fix the eventemitter issue
 // TODO possible libs :
@@ -535,6 +761,23 @@ var isSubset = function(a, b) {
 
 var prettyJson = function(obj){
   return JSON.stringify(obj, null, 2);
+};
+
+var prettyLog = function(title, toLog) {
+  logChar = logChar || "#";
+  var row1 = "";
+  var row2 = logChar + logChar + " " + title + " " + logChar + logChar;
+  var row3 = "";
+  while(row1.length < row2.length) {
+    row1 = row1 + logChar;
+    row3 = row3 + logChar;
+  }
+  console.log(" ");
+  console.log(row1);
+  console.log(row2);
+  console.log(row3);
+  console.log(" ");
+  console.log(JSON.stringify(toLog, null, 2));
 };
 
 Verity.assertObjectEquals = assertObjectEquals;
