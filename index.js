@@ -89,11 +89,6 @@ Verity.prototype.header = function(name, value){
   return this;
 };
 
-Verity.prototype.expectHeader = function(name, value){
-  this._expectedHeaders[name] = value;
-  return this;
-};
-
 Verity.prototype.authStrategy = function(creds, cb){
   // replace this with a function that logs the user in
   return cb(null);
@@ -358,11 +353,6 @@ Verity.prototype.newTest = function(cb) {
   // Reset logging status.
   this._logBody = true;
   this._logStatus = true;
-  this._logHeaders = false;
-  this._logCookies = false;
-
-  // Forget how to log in.
-  this.creds = null;
 
   // Request options.
   var options = {
@@ -400,8 +390,8 @@ Verity.prototype.newTest = function(cb) {
 var finishTest = function(options, cb) {
   this.client(options, (function(err, res) {
     if (err) {
-      return cb(err)
-    };
+      return cb(err);
+    }
 
     if (this.jsonModeOn){
       try {
@@ -419,13 +409,15 @@ var finishTest = function(options, cb) {
       try {
         expectation.fnTest.bind(this)(res);
       } catch (err) {
-        var description = expectation.description || ("Unnamed Expectation " + unnamedExpectationCount++);
-        errors[description] = err;
+        var name = expectation.name || ("Unnamed Expectation " + unnamedExpectationCount++);
+        err.error = err.message; // err.message won't log with JSON.stringify
+        errors[name] = err;
       }
-    }).bind(this))
+    }).bind(this));
 
-    // reset expectations
+    // reset test vars
     this._expectations = [];
+    this.creds = null;
 
     var result = {
       errors: errors,
@@ -436,48 +428,31 @@ var finishTest = function(options, cb) {
     };
 
     if (!_.isEmpty(errors)) {
-      logBigHeader("Errors")
       for (var name in errors) {
-        logSmallHeader(name);
+        logHeader(name);
         var error = errors[name];
         var diff = error.colorDiff;
         delete error.colorDiff;
         logJSON(error);
         if (diff) {
-          console.log("Diff:")
-          console.log(diff);
+          console.log("\n", diff);
         }
-      }
-
-      logBigHeader("Response")
+      }      
 
       if (this._logStatus) {
-        logSmallHeader("Status")
-        logJSON(result.status);
+        logHeader("Status (ok)");
+        console.log(res.statusCode);
       }
-      if (this._logHeaders) {
-        logSmallHeader("Headers")
-        logJSON(result.headers);
-      }
-      if (this._logCookies) {
-        logSmallHeader("Cookies")
-        logJSON(result.cookies);
-      }
+
       if (this._logBody) {
-        logSmallHeader("Body")
-        logJSON(result.body);
+        logHeader("Body (ok)");
+        logJSON(res.body);
       }
-        
-      var errorNames = Object.keys(errors);
-      var retErr;
-      if (errorNames.length > 1) {
-        retErr = new Error(errorNames.slice(0, -1).join(", ") + ", and " + errorNames.slice(-1)[0]);
-      } else {
-        retErr = new Error(errorNames[0]);
-      }
+
+      var retErr = new Error(Object.keys(errors).join(", "));
       return cb(retErr, result);
     } else {
-      return cb(null, result)
+      return cb(null, result);
     }
     
   }).bind(this));
@@ -488,80 +463,83 @@ var finishTest = function(options, cb) {
 */
 
 Verity.registerExpectMethod = function(key, fnTest) {
+  if (!key || !fnTest) {
+    throw new Error("Expect method must have a name and a function");
+  }
   if (Verity.prototype[key]) {
     throw new Error("Verity already has a method named " + key);
   }
-  Verity.prototype[key] = this.expect.bind(this, key, fnTest)
+  var name = key[0].toUpperCase() + key.slice(1);
+  Verity.prototype[key] = function() {
+    this.expect(name, fnTest.apply(this, arguments));
+  };
 };
 
-Verity.prototype.expect = function(description, fnTest) {
+Verity.prototype.expect = function(name, fnTest) {
   if (!fnTest) {
-    fnTest = description;
-    description = '';
+    fnTest = name;
+    name = '';
   }
-  this._expectations.push({description: description, fnTest: fnTest});
+  this._expectations.push({name: name, fnTest: fnTest});
   return this;
 };
 
 Verity.prototype.newExpectStatus = function(expected) {
   this.expect("Status", function(res) {
+    this._logStatus = false;
     var actual = res.statusCode;
-    console.log("actual/expected", actual, expected)
     if (actual !== expected) {
-      var err = new Error(["Expected status", actual, "but got", expected]);
+      var err = new Error(["Expected status", actual, "but got", expected].join(" "));
       err.actual = actual;
       err.expected = expected;
       throw err;
-    } else {
-      this._logStatus = false;
     }
   });
   return this;
 };
 
-Verity.prototype.newExpectCookie = function(name, expected) {
-  this.expect("Cookie: " + name, function(res) {
+Verity.prototype.newExpectCookies = function(name, expectedCookies) {
+  this.expect("Cookies", function(res) {
     this.cookies = _.extend(this.cookies, getCookiesFromResponse(res));
-    var actual = this.cookies[name];
-    if (!actual) {
-      this._logCookies = true;
-      var err = new Error(["Expected cookie", name, "but none was found"].join(" "));
-      err.expected = expected;
-      throw err;
-    } else if (actual !== expected) {
-      this._logCookies = true;
-      var err = new Error(["Expected cookie", name, "to have value", expected, "but got", actual].join(" "));
-      err.actual = actual;
-      err.expected = expected;
+    var badCookies = [];
+    for (var name in expectedCookies) {
+      var expected = expectedCookies;
+      var actual = this.cookies[name];
+      if (actual !== expected) {
+        badCookies.push(name);
+      }
+    }
+    if (badCookies.length) {
+      var err = new Error("Error in cookies:" + badCookies.join(", "));
+      err.actual = this.cookies;
+      err.expected = expectedCookies;
       throw err;
     }
   });
   return this;
 };
 
-Verity.prototype.newExpectHeader = function(name, expected) {
-  this.expect("Header: " + name, function(res) {
-    var actual = res.headers[name];
-    if (name === "content-type") {
-      var reaper = new Reaper();
-      reaper.register(expected);
-      if (!reaper.isAcceptable(actual)) {
-        this._logHeaders = true;
-        var err = new Error(["Expected header", name, "to have value", expected, "but got", actual].join(" "));
-        err.actual = actual;
-        err.expected = expected;
-        throw err;
+
+Verity.prototype.newExpectHeaders = function(name, expectedHeaders) {
+  this.expect("Headers", function(res) {
+    var badHeaders = [];
+    for (var name in expectedHeaders) {
+      var expected = expectedHeaders[name];
+      var actual = res.headers[name];
+      if (name === "content-type") {
+        var reaper = new Reaper();
+        reaper.register(expected);
+        if (!reaper.isAcceptable(actual)) {
+          badHeaders.push(name);
+        }
+      } else if (actual !== expected) {
+        badHeaders.push(name);
       }
-    } else if (!actual) {
-      this._logHeaders = true;
-      var err = new Error(["Expected header", name, "but none was found"].join(" "));
-      err.expected = expected;
-      throw err;
-    } else if (actual !== expected) {
-      this._logHeaders = true;
-      var err = new Error(["Expected header", name, "to have value", expected, "but got", actual].join(" "));
-      err.actual = actual;
-      err.expected = expected;
+    }
+    if (badHeaders.length) {
+      var err = new Error("Error in headers:" + badHeaders.join(", "));
+      err.actual = res.headers;
+      err.expected = expectedHeaders;
       throw err;
     }
   });
@@ -570,13 +548,13 @@ Verity.prototype.newExpectHeader = function(name, expected) {
 
 Verity.prototype.newExpectBody = function(expected) {
   this.expect("Body", function(res) {
+    this._logBody = false;
     try {
       assertObjectEquals(res.body, expected);
-      this._logBody = false;
     } catch (err) {
       err.actual = res.body;
       err.expected = expected;
-      throw err
+      throw err;
     }
   });
   return this;
@@ -590,13 +568,18 @@ Verity.prototype.newExpectPartialBody = function(expected) {
     } catch (err) {
       err.actual = JSON.stringify(res.body, null, 2);
       err.expected = JSON.stringify(expected, null, 2);
-      throw err
+      throw err;
     }
   });
 };
 
 Verity.prototype.expectStatus = function (code) {
   this._expectedStatus = code;
+  return this;
+};
+
+Verity.prototype.expectHeader = function(name, value){
+  this._expectedHeaders[name] = value;
   return this;
 };
 
@@ -784,7 +767,7 @@ var prettyJson = function(obj){
   return JSON.stringify(obj, null, 2);
 };
 
-var logBigHeader = function(title) {
+var logHeader = function(title) {
   var logChar = "#";
   var row1 = "";
   var row2 = " " + title + " ";
@@ -805,12 +788,6 @@ var logBigHeader = function(title) {
   console.log(row2);
   console.log(row3);
   console.log(" ");
-};
-
-var logSmallHeader = function(title) {
-  console.log(" ")
-  console.log(" ")
-  console.log("***", title, "***");
 };
 
 var logJSON = function(toLog) {
