@@ -384,14 +384,13 @@ Verity.prototype.newTest = function(cb) {
     }
   }
 
-
   if (this.creds && this._mustlogin){
     if (!this.authStrategy){
       throw "can't login with no auth strategy";
     }
-    this.authStrategy(this.creds, function(){
+    this.authStrategy(this.creds, (function(){
       finishTest.bind(this)(options, cb);
-    });
+    }).bind(this));
   } else {
     finishTest.bind(this)(options, cb);
   }
@@ -425,40 +424,62 @@ var finishTest = function(options, cb) {
       }
     }).bind(this))
 
-    var result, err;
+    // reset expectations
+    this._expectations = [];
+
+    var result = {
+      errors: errors,
+      status: res.statusCode,
+      headers: res.headers,
+      cookies: this.cookies,
+      body: res.body
+    };
+
     if (!_.isEmpty(errors)) {
-      var errorNames = Object.keys(errors);
-      if (errorNames.length > 1) {
-        err = new Error(errorNames.slice(0, -1).join(", ") + ", and " + errorNames.slice(-1)[0]);
-      } else {
-        err = new Error(errorNames[0]);
+      logBigHeader("Errors")
+      for (var name in errors) {
+        logSmallHeader(name);
+        var error = errors[name];
+        var diff = error.colorDiff;
+        delete error.colorDiff;
+        logJSON(error);
+        if (diff) {
+          console.log("Diff:")
+          console.log(diff);
+        }
       }
 
-      result = {
-        errors: errors
-      };
-
-      prettyLog("Errors", errors);
+      logBigHeader("Response")
 
       if (this._logStatus) {
-        result.status = res.statusCode;
-        prettyLog("Status", result.status);
+        logSmallHeader("Status")
+        logJSON(result.status);
       }
       if (this._logHeaders) {
-        result.headers = res.headers;
-        prettyLog("Headers", result.headers);
+        logSmallHeader("Headers")
+        logJSON(result.headers);
       }
       if (this._logCookies) {
-        result.cookies = this.cookies[name];
-        prettyLog("Cookies", result.cookies);
+        logSmallHeader("Cookies")
+        logJSON(result.cookies);
       }
       if (this._logBody) {
-        result.body = res.body;
-        prettyLog("Body", result.body);
+        logSmallHeader("Body")
+        logJSON(result.body);
       }
+        
+      var errorNames = Object.keys(errors);
+      var retErr;
+      if (errorNames.length > 1) {
+        retErr = new Error(errorNames.slice(0, -1).join(", ") + ", and " + errorNames.slice(-1)[0]);
+      } else {
+        retErr = new Error(errorNames[0]);
+      }
+      return cb(retErr, result);
+    } else {
+      return cb(null, result)
     }
-    this._expectations = [];
-    return cb(err, result);
+    
   }).bind(this));
 };
 
@@ -763,20 +784,36 @@ var prettyJson = function(obj){
   return JSON.stringify(obj, null, 2);
 };
 
-var prettyLog = function(title, toLog) {
-  logChar = logChar || "#";
+var logBigHeader = function(title) {
+  var logChar = "#";
   var row1 = "";
-  var row2 = logChar + logChar + " " + title + " " + logChar + logChar;
+  var row2 = " " + title + " ";
   var row3 = "";
   while(row1.length < row2.length) {
     row1 = row1 + logChar;
     row3 = row3 + logChar;
   }
+  for (var i = 0; i < 10; i++) {
+    row1 = logChar + row1 + logChar;
+    row2 = logChar + row2 + logChar;
+    row3 = logChar + row3 + logChar;
+  }
+
+  console.log(" ");
   console.log(" ");
   console.log(row1);
   console.log(row2);
   console.log(row3);
   console.log(" ");
+};
+
+var logSmallHeader = function(title) {
+  console.log(" ")
+  console.log(" ")
+  console.log("***", title, "***");
+};
+
+var logJSON = function(toLog) {
   console.log(JSON.stringify(toLog, null, 2));
 };
 
