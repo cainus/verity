@@ -120,7 +120,6 @@ Verity.prototype.setCookieFromString = function(str, cb){
 Verity.prototype.jsonMode = function(modeOn){
   if (modeOn !== false){
     this.jsonModeOn = true;
-    this.expectHeaders({'content-type': 'application/json'});
   } else {
     this.jsonModeOn = false;
   }
@@ -171,6 +170,11 @@ Verity.prototype.request = function(options, cb){
 };
 
 Verity.prototype.test = function(cb) {
+  // Make sure cb has an error arg, since this is where any errors get sent.
+  if (!cb || cb.length === 0) {
+    console.error("WARNING: verity instance passed a bad callback with no error argument.")
+  }
+
   // Reset logging status.
   this._logBody = true;
   this._logStatus = true;
@@ -289,7 +293,7 @@ Verity.prototype.test = function(cb) {
   Expectation methods - test what was returned.
 */
 
-Verity.registerExpectMethod = function(key, fnTest) {
+Verity.register = function(key, fnTest) {
   if (!key || !fnTest) {
     throw new Error("Expect method must have a name and a function");
   }
@@ -299,6 +303,7 @@ Verity.registerExpectMethod = function(key, fnTest) {
   var name = key[0].toUpperCase() + key.slice(1);
   Verity.prototype[key] = function() {
     this.expect(name, fnTest.apply(this, arguments));
+    return this;
   };
 };
 
@@ -316,7 +321,7 @@ Verity.prototype.expectStatus = function(expected) {
     this._logStatus = false;
     var actual = res.statusCode;
     if (actual !== expected) {
-      var err = new Error(["Expected status", actual, "but got", expected].join(" "));
+      var err = new Error(["Expected status", expected, "but got", actual].join(" "));
       err.actual = actual;
       err.expected = expected;
       throw err;
@@ -360,7 +365,7 @@ Verity.prototype.expectHeaders = function(expectedHeaders) {
       var expected = this._expectedHeaders[name];
       var actual = res.headers[name];
       if (name === "content-type") {
-        if (actual.indexOf(expected) + actual.indexOf("*/*") === -2) {
+        if (!actual || actual.indexOf(expected) + actual.indexOf("*/*") === -2) {
           badHeaders.push(name);
         }
       } else if (actual !== expected) {
@@ -397,15 +402,16 @@ Verity.prototype.expectBody = function(expected) {
 
 Verity.prototype.expectPartialBody = function(expected) {
   this.expect("Body", function(res) {
+    this._logBody = false;
     try {
       isSubset(expected, res.body);
-      this._logBody = false;
     } catch (err) {
-      err.actual = JSON.stringify(res.body, null, 2);
-      err.expected = JSON.stringify(expected, null, 2);
+      err.actual = res.body;
+      err.expected = expected;
       throw err;
     }
   });
+  return this;
 };
 
 var getCookiesFromResponse = function(res){
@@ -529,5 +535,7 @@ var logJSON = function(toLog) {
 
 Verity.assertObjectEquals = assertObjectEquals;
 Verity.prototype.assertObjectEquals = assertObjectEquals;
+Verity.isSubset = isSubset;
+Verity.prototype.isSubset = isSubset;
 
 module.exports = Verity;
