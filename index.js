@@ -172,7 +172,7 @@ Verity.prototype.request = function(options, cb){
 Verity.prototype.test = function(cb) {
   // Make sure cb has an error arg, since this is where any errors get sent.
   if (!cb || cb.length === 0) {
-    console.error("WARNING: verity instance passed a bad callback with no error argument.")
+    console.error("WARNING: verity instance passed a bad callback with no error argument.");
   }
 
   // Reset logging status.
