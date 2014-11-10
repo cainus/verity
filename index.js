@@ -46,7 +46,9 @@ var Verity = function(uri, _method){
 
   this._expectedHeaders = {};
   this._expectedCookies = {};
-  this._expectations = [];
+  this._expectations = {};
+
+  this._unnamedExpectationCount = 0;
 };
 
 /*
@@ -59,6 +61,7 @@ Verity.prototype.reset = function(){
   this.headers = {};
   this._expectedHeaders = {};
   this._expectedCookies = {};
+  this._expectations = {};
 };
 
 Verity.prototype.body = function(body){
@@ -233,18 +236,17 @@ Verity.prototype.test = function(cb) {
       // Determine which tests failed.
       var unnamedExpectationCount = 1;
       var errors = {};
-      that._expectations.forEach(function(expectation){
+      Object.keys(that._expectations).forEach(function(name){
         try {
-          expectation.fnTest.bind(that)(res);
+          that._expectations[name].bind(that)(res);
         } catch (err) {
-          var name = expectation.name || ("Unnamed Expectation " + unnamedExpectationCount++);
           err.error = err.message; // err.message won't log with JSON.stringify
           errors[name] = err;
         }
       });
 
       // Reset test vars.
-      that._expectations = [];
+      that._expectations = {};
       that.creds = null;
 
       // Generate our result and log.
@@ -310,9 +312,9 @@ Verity.register = function(key, fnTest) {
 Verity.prototype.expect = function(name, fnTest) {
   if (!fnTest) {
     fnTest = name;
-    name = '';
+    name = "Expectation " + this._unnamedExpectationCount++;
   }
-  this._expectations.push({name: name, fnTest: fnTest});
+  this._expectations[name] = fnTest;
   return this;
 };
 
