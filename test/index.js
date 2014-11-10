@@ -174,7 +174,7 @@ describe('verity', function(){
             "Status": {
               "actual": 404,
               "expected": 200,
-              "error": "Expected status 404 but got 200"
+              "error": "Expected status 200 but got 404"
             },
             "Body": {
               "actual": "Cannot GET /doesNotExist\n",
