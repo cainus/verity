@@ -282,7 +282,7 @@ Verity.prototype.test = function(cb) {
           }
         }
 
-        var retErr = new Error("expectations failed: " + Object.keys(errors).join(", "));
+        var retErr = new Error("Expectations failed: " + Object.keys(errors).join(", "));
         return cb(retErr, result);
       } else {
         return cb(null, result);
