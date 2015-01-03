@@ -166,7 +166,7 @@ describe('verity', function(){
       expectBody('hello world').
       log(false).
       test(function(err, result){
-        expect(err.message).to.be('Expectiations failed: Status, Body');
+        expect(err.message).to.be('Expectations failed: Status, Body');
           //date header changes too much to test easily
         delete result.headers.date;
         var expected = {
@@ -243,7 +243,7 @@ describe('verity', function(){
       test(function(err, result){
         //date header changes too much to test easily
         delete result.headers.date;
-        expect(err.message).to.be("Expectiations failed: Body");
+        expect(err.message).to.be("Expectations failed: Body");
         var expected = {
           "errors": {
             "Body": {
