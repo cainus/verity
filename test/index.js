@@ -84,6 +84,10 @@ describe('verity', function(){
       res.send({gotCookies : req.cookies});
     });
 
+    app.get('/nested/path', function(req, res){
+      res.send('nested path');
+    });
+
     server = app.listen(3000, function(err){
       if (err) {
         throw err;
@@ -236,6 +240,13 @@ describe('verity', function(){
     verity('http://localhost:3000/no-such-path').
       path('simpleGET').
       expectBody("hello world").
+      expectStatus(200).
+      test(done);
+  });
+  it("passes path arguments correctly", function(done) {
+    verity('http://localhost:3000/no-such-path').
+      path(['nested'], 'path').
+      expectBody("nested path").
       expectStatus(200).
       test(done);
   });

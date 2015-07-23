@@ -83,8 +83,8 @@ Verity.prototype.header = function(name, value){
   return this;
 };
 
-Verity.prototype.path = function(path) {
-  this.uri = this.uri.path(path);
+Verity.prototype.path = function() {
+  this.uri = this.uri.path.apply(this.uri, arguments);
   return this;
 };
 
