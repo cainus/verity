@@ -83,6 +83,16 @@ Verity.prototype.header = function(name, value){
   return this;
 };
 
+Verity.prototype.path = function(path) {
+  this.uri = this.uri.path(path);
+  return this;
+};
+
+Verity.prototype.query = function(obj){
+  this.uri = this.uri.query(obj);
+  return this;
+};
+
 Verity.prototype.authStrategy = function(creds, cb){
   // replace this with a function that logs the user in
   return cb(null);

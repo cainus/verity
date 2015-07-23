@@ -56,6 +56,9 @@ describe('verity', function(){
     app.get('/headers', function(req, res){
       res.send(req.headers);
     });
+    app.get('/query', function (req, res) {
+      res.send(req.query);
+    });
     app.post('/login', function(req, res){
       expect(req.body.username).to.equal("gregg");
       expect(req.body.password).to.equal("password");
@@ -219,6 +222,21 @@ describe('verity', function(){
       }).
       expectStatus(200).
       //log(false).
+      test(done);
+  });
+  it("can set query string", function(done) {
+    verity('http://localhost:3000/query').
+      jsonMode().
+      query({key: "value"}).
+      expectBody({key: "value"}).
+      expectStatus(200).
+      test(done);
+  });
+  it("can set path", function(done) {
+    verity('http://localhost:3000/no-such-path').
+      path('simpleGET').
+      expectBody("hello world").
+      expectStatus(200).
       test(done);
   });
   it("can follow redirects", function(done) {
