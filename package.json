@@ -1,6 +1,6 @@
 {
   "name": "verity",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "a lib for testing for http request/response",
   "main": "index.js",
   "scripts": {
