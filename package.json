@@ -1,6 +1,6 @@
 {
   "name": "verity",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "a lib for testing for http request/response",
   "main": "index.js",
   "scripts": {
@@ -39,7 +39,7 @@
     "difflet": "0.2.6",
     "request": "2.31.0",
     "expect.js": "0.2.0",
-    "urlgrey": "0.3.2",
+    "urlgrey": "0.4.0",
     "superagent": "~0.16.0",
     "JSONPath": "~0.9.1",
     "underscore": "~1.5.2",
