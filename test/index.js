@@ -4,10 +4,14 @@ var expect = require('expect.js');
 var deepEqual = require('deep-equal');
 var difflet = require('difflet');
 var assert = require('assert');
-var util = require('util');
+var util = require('../util');
 var request = require('request');
 var jsondiffpatch = require('jsondiffpatch');
+var diff = difflet({indent:2, comment: true}).compare;
 
+function flatten(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
 
 var failOnError = function(err){
   if (err){
@@ -18,27 +22,6 @@ var failOnError = function(err){
     console.error("");
     throw "unexpected error: " + JSON.stringify((err.message || err));
   }
-};
-
-
-var assertObjectEquals = function assertObjectEquals(actual, expected){
-  if (!deepEqual(actual, expected)){
-    var prettyJson = function(obj){
-      return JSON.stringify(obj, null, "  ");
-    };
-    process.stdout.write(difflet.compare(actual, expected));
-    console.log("\n\nactual");
-    console.log(prettyJson(actual));
-    console.log("\n\nexpected");
-    console.log(prettyJson(expected));
-    console.log("\n\n");
-    console.log('jsonDiff');
-    console.log(JSON.stringify(jsondiffpatch.diff(actual, expected), null, 2));
-    console.log("\n\n");
-    assert.fail(actual, expected);
-    return false;
-  }
-  return true;
 };
 
 
@@ -72,6 +55,10 @@ describe('verity', function(){
 
     app.get('/someJson', function(req, res){
       res.send({"test":"test"});
+    });
+
+    app.get('/moreJson', function(req, res){
+      res.send({"test":"test", "foo": "bar"});
     });
 
     app.get('/echoCookies', function(req, res){
@@ -186,21 +173,20 @@ describe('verity', function(){
             "Body": {
               "actual": "Cannot GET /doesNotExist\n",
               "expected": "hello world",
-              "colorDiff": "\u001b[34m\u001b[1m\"hello world\"\u001b[0m",
-              "error": "ObjectEqualityAssertionError"
+              "error": 'ObjectEqualityAssertionError:\n\u001b[0m\u001b[34m\u001b[1m"Cannot GET /doesNotExist\n"\u001b[0m',
             }
           },
           "status": 404,
           "headers": {
             "x-powered-by": "Express",
             "content-type": "text/html",
-            "connection": "keep-alive",
-            "transfer-encoding": "chunked"
+            "connection": "close",
+            "content-length": "25"
           },
           "cookies": {},
           "body": "Cannot GET /doesNotExist\n"
         };
-        expect(JSON.stringify(result)).to.equal(JSON.stringify(expected));
+        util.assertObjectEquals(flatten(result), flatten(expected));
         done();
       });
   });
@@ -222,7 +208,7 @@ describe('verity', function(){
         "x-forwarded-proto":"https",
         "host":"localhost:3000",
         "content-length":"0",
-        "connection":"keep-alive"
+        "connection":"close"
       }).
       expectStatus(200).
       //log(false).
@@ -282,8 +268,7 @@ describe('verity', function(){
               "expected": {
                 "asdf": "asdf"
               },
-              "colorDiff": "{\u001b[32m\u001b[1m\"asdf\":\"asdf\"\u001b[0m,\u001b[31m\u001b[1m\"test\":\"test\"\u001b[0m}",
-              "error": "ObjectEqualityAssertionError"
+              "error": 'ObjectEqualityAssertionError:\n\u001b[0m{\u001b[32m\u001b[1m\n  "test" : "test"\u001b[0m\u001b[36m\u001b[1m // != undefined\u001b[0m\n  \u001b[31m\u001b[1m\u001b[0m\u001b[36m\u001b[1m// \u001b[0m\u001b[31m\u001b[1m"asdf" : "asdf"\u001b[0m\n}'
             }
           },
           "status": 200,
@@ -292,14 +277,55 @@ describe('verity', function(){
             "content-type": "application/json; charset=utf-8",
             "content-length": "20",
             "etag": "\"-1526328376\"",
-            "connection": "keep-alive"
+            "connection": "close"
           },
           "cookies": {},
           "body": {
             "test": "test"
           }
         };
-        expect(JSON.stringify(result)).to.eql(JSON.stringify(expected));
+        util.assertObjectEquals(flatten(result), flatten(expected));
+        done();
+      });
+  });
+  it("catches mismatches in expectPartialBody", function(done){
+    verity('http://localhost:3000/moreJson').
+      jsonMode().
+      expectStatus(200).
+      expectPartialBody({"test": 1}).
+      log(false).
+      test(function(err, result){
+        //date header changes too much to test easily
+        delete result.headers.date;
+        expect(err.message).to.be("Expectations failed: Body");
+        var expected = {
+          "errors": {
+            "Body": {
+              "actual": {
+                "test": "test",
+                "foo": "bar"
+              },
+              "expected": {
+                "test": 1
+              },
+              "error": 'ObjectPartialAssertionError\n\u001b[0m{\n  "test" : \u001b[34m\u001b[1m"test"\u001b[0m,\u001b[36m\u001b[1m // != 1\u001b[0m\n  "foo" : "bar"\n}'
+            }
+          },
+          "status": 200,
+          "headers": {
+            "x-powered-by": "Express",
+            "content-type": "application/json; charset=utf-8",
+            "content-length": "36",
+            "etag": "\"1140083462\"",
+            "connection": "close"
+          },
+          "cookies": {},
+          "body": {
+            "test": "test",
+            "foo": "bar"
+          }
+        };
+        util.assertObjectEquals(flatten(result), flatten(expected));
         done();
       });
   });

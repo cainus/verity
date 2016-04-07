@@ -1,18 +1,21 @@
 var deepEqual = require('deep-equal');
 var expect = require("expect.js");
-var util = require('util');
+var util = require('./util');
 var urlgrey = require('urlgrey');
 var request = require('request');
 var superagent = require('superagent');
 var Reaper = require('reaper');
 var difflet = require('difflet');
-var diff = difflet({indent:2}).compare;
+var diff = difflet({indent:2, comment: true}).compare;
 var assert = require('assert');
 var _ = require('underscore');
 var requestify = require('requestify');
 
 var deepequal = require("deep-equal");
 var deepmerge = require("deepmerge");
+
+var isSubset = util.isSubset;
+var assertObjectEquals = util.assertObjectEquals;
 
 
 var isString = function(str){
@@ -126,7 +129,7 @@ Verity.prototype.setCookieFromString = function(str, cb){
     that.cookieJar.getCookies('/', {}, function(err, cookies){
       cb(err);
     });
-  
+
   });
 };
 
@@ -269,37 +272,23 @@ Verity.prototype.test = function(cb) {
       };
 
       if (!_.isEmpty(errors)) {
-        if (that.shouldLog) {
-          for (var name in errors) {
-            logHeader(name);
-            var error = errors[name];
-            var diff = error.colorDiff;
-            delete error.colorDiff;
-            logJSON(error);
-            if (diff) {
-              console.log("\n", diff);
-            }
-          }      
-
-          if (that._logStatus) {
-            logHeader("Status (ok)");
-            console.log(res.statusCode);
-          }
-
-          if (that._logBody) {
-            logHeader("Body (ok)");
-            logJSON(res.body);
-          }
-        }
-
-        var retErr = new Error("Expectations failed: " + Object.keys(errors).join(", "));
-        return cb(retErr, result);
+        return cb(makeCombinedError(errors), result);
       } else {
         return cb(null, result);
       }
     });
   });
 };
+
+function makeCombinedError(errors) {
+  var msg = [];
+  for (var name in errors) {
+    msg.push(formatHeader(name));
+    msg.push(errors[name].message);
+  }
+
+  return new Error("Expectations failed:\n\u001b[0m" + msg.join("\n"));
+}
 
 /*
   Expectation methods - test what was returned.
@@ -480,45 +469,14 @@ var cookieStringToObject = function(str){
 // TODO possible libs :
 //  - create a jsonschema from code
 //
-// goals : 
+// goals :
 // - be good at reporting the whole diff at once (not just the first one found)
 // - make repeated requests easy (with cookies)
-// - 
+// -
 // test:
 // chaining with cookies
 
-var assertObjectEquals = function (actual, expected){
-  if (!deepEqual(actual, expected)){
-    var err = new Error("ObjectEqualityAssertionError");
-    err.actual = actual;
-    err.expected = expected;
-    err.colorDiff = difflet.compare(actual, expected);
-    throw err;
-  }
-};
-
-/*
-  Tests if object a is a subset of object b.
-
-  Easiest way to do this is
-
-    b' = deepmerge(a, b)
-    return equal(b', b)
-
-  Will not necessarily work if any values are arrays
-  of elements, since the arrays would need to be in
-  sorted order. Unclear what that means for arrays
-  of objects.
- */
-var isSubset = function(a, b) {
-  var bPrime;
-  bPrime = deepmerge(a, b);
-  if(!deepequal(bPrime, b)) {
-    throw new Error("ObjectPartialAssertionError");
-  }
-};
-
-var logHeader = function(title) {
+var formatHeader = function(title) {
   var logChar = "#";
   var row1 = "";
   var row2 = " " + title + " ";
@@ -533,16 +491,7 @@ var logHeader = function(title) {
     row3 = logChar + row3 + logChar;
   }
 
-  console.log(" ");
-  console.log(" ");
-  console.log(row1);
-  console.log(row2);
-  console.log(row3);
-  console.log(" ");
-};
-
-var logJSON = function(toLog) {
-  console.log(JSON.stringify(toLog, null, 2));
+  return "\n\n" + [row1, row2, row3].join("\n") + "\n\n";
 };
 
 Verity.assertObjectEquals = assertObjectEquals;
