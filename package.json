@@ -46,6 +46,6 @@
     "requestify": "~0.1.16",
     "superagent": "~0.16.0",
     "underscore": "~1.5.2",
-    "urlgrey": "0.4.0"
+    "urlgrey": "0.4.4"
   }
 }
