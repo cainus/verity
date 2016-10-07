@@ -107,6 +107,12 @@ Verity.prototype.login = function(creds){
   return this;
 };
 
+Verity.prototype.logout = function(){
+  this.creds = null;
+  this._mustlogin = false;
+  return this;
+};
+
 Verity.prototype.followRedirect = function(val) {
   if (val === false) {
     this._followRedirect = false;
