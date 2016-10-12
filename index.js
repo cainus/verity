@@ -10,6 +10,7 @@ var diff = difflet({indent:2, comment: true}).compare;
 var assert = require('assert');
 var _ = require('underscore');
 var requestify = require('requestify');
+var parseCookie = require("tough-cookie").Cookie.parse;
 
 var deepequal = require("deep-equal");
 var deepmerge = require("deepmerge");
@@ -130,7 +131,7 @@ Verity.prototype.setAuthStrategy = function(strategy){
 
 Verity.prototype.setCookieFromString = function(str, cb){
   var that = this;
-  var cookie = request.cookie(str);
+  var cookie = parseCookie(str).toString();
   this.cookieJar.setCookie(cookie, '/', {}, function(err){
     that.cookieJar.getCookies('/', {}, function(err, cookies){
       cb(err);

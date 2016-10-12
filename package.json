@@ -45,6 +45,7 @@
     "request": "2.31.0",
     "requestify": "~0.1.16",
     "superagent": "~0.16.0",
+    "tough-cookie": "2.3.1",
     "underscore": "~1.5.2",
     "urlgrey": "0.4.4"
   }
