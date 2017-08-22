@@ -285,10 +285,15 @@ Verity.prototype.test = function(cb) {
 
 function makeCombinedError(errors) {
   var msg = [];
+  var lastError;
   for (var name in errors) {
     msg.push(formatHeader(name));
     msg.push(errors[name].message);
+    msg.push(errors[name].stack);
+    lastError = errors[name];
   }
+
+  if (msg.length === 3) throw lastError;
 
   return new Error("Expectations failed:\n\u001b[0m" + msg.join("\n"));
 }
