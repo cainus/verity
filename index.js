@@ -198,10 +198,6 @@ Verity.prototype.test = function(cb) {
     console.error("WARNING: verity instance passed a bad callback with no error argument.");
   }
 
-  // Reset logging status.
-  this._logBody = true;
-  this._logStatus = true;
-
   var that = this;
 
   // Request options.
@@ -326,7 +322,6 @@ Verity.prototype.expect = function(name, fnTest) {
 
 Verity.prototype.expectStatus = function(expected) {
   this.expect("Status", function(res) {
-    this._logStatus = false;
     var actual = res.statusCode;
     if (actual !== expected) {
       var err = new Error(["Expected status", expected, "but got", actual].join(" "));
@@ -396,7 +391,6 @@ Verity.prototype.clearExpectedHeaders = function() {
 
 Verity.prototype.expectBody = function(expected) {
   this.expect("Body", function(res) {
-    this._logBody = false;
     try {
       assertObjectEquals(res.body, expected);
     } catch (err) {
@@ -410,7 +404,6 @@ Verity.prototype.expectBody = function(expected) {
 
 Verity.prototype.expectPartialBody = function(expected) {
   this.expect("Body", function(res) {
-    this._logBody = false;
     try {
       isSubset(expected, res.body);
     } catch (err) {
