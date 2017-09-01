@@ -288,13 +288,23 @@ Verity.prototype.test = function(cb) {
 };
 
 function makeCombinedError(errors) {
+  var keys = Object.keys(errors);
+
+  // if (keys.length === 1) {
+  //   var err = errors[keys[0]];
+  //   err.message = "Expectations failed:\n\u001b[0m" + err.message;
+  //   return err;
+  // }
+
   var msg = [];
-  for (var name in errors) {
+  keys.forEach(function(name) {
     msg.push(formatHeader(name));
     msg.push(errors[name].message);
-  }
+  });
 
-  return new Error("Expectations failed:\n\u001b[0m" + msg.join("\n"));
+  var combined = new Error("Expectations failed:\n\u001b[0m" + msg.join("\n"));
+  combined.stack = errors[keys[0]].stack;
+  return combined;
 }
 
 /*
