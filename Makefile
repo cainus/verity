@@ -3,12 +3,10 @@ REPORTER = spec
 lint:
 	./node_modules/.bin/jshint ./test ./index.js
 
-test:
-	$(MAKE) lint
-	./node_modules/.bin/mocha --reporter $(REPORTER) --check-leaks -b
+test: lint
+	./node_modules/.bin/mocha --reporter $(REPORTER) --check-leaks
 
-test-cov:
-	$(MAKE) lint
+test-cov: lint
 	./node_modules/.bin/istanbul cover \
 	./node_modules/mocha/bin/_mocha -- -b --reporter $(REPORTER) --check-leaks
 	echo "See reports at ./coverage/lcov-report/index.html"
