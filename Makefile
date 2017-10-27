@@ -5,7 +5,7 @@ lint:
 
 test:
 	$(MAKE) lint
-	./node_modules/.bin/mocha --reporter $(REPORTER) --check-leaks -b
+	./node_modules/.bin/mocha --reporter $(REPORTER) --check-leaks
 
 test-cov:
 	$(MAKE) lint

@@ -193,9 +193,17 @@ Verity.prototype.request = function(options, cb){
 };
 
 Verity.prototype.test = function(cb) {
-  // Make sure cb has an error arg, since this is where any errors get sent.
-  if (!cb || cb.length === 0) {
-    console.error("WARNING: verity instance passed a bad callback with no error argument.");
+  // if no callback is passed, we'll return a promise
+  var promise, resolve, reject;
+  if (!cb) {
+    promise = new Promise(function(_resolve, _reject) {
+      resolve = _resolve;
+      reject = _reject;
+    });
+    cb = function (err, response) {
+      if (err) return reject(err);
+      resolve(response);
+    };
   }
 
   // Reset logging status.
@@ -285,6 +293,8 @@ Verity.prototype.test = function(cb) {
       }
     });
   });
+
+  return promise; // will be undefined if callback was passed
 };
 
 function makeCombinedError(errors) {

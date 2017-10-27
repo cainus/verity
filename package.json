@@ -28,11 +28,11 @@
   },
   "homepage": "https://github.com/cainus/verity",
   "devDependencies": {
+    "coveralls": "2.7.0",
     "express": "3.4.8",
     "istanbul": "0.2.4",
-    "mocha": "1.17.1",
-    "jshint": "2.4.3",
-    "coveralls": "2.7.0"
+    "mocha": "^3.5.3",
+    "jshint": "2.4.3"
   },
   "dependencies": {
     "JSONPath": "~0.9.1",
