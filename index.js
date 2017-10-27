@@ -303,7 +303,7 @@ function makeCombinedError(errors) {
     lastError = errors[name];
   }
 
-  if (msg.length === 3) throw lastError;
+  if (msg.length === 3) return lastError;
 
   return new Error("Expectations failed:\n\u001b[0m" + msg.join("\n"));
 }
