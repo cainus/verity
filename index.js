@@ -9,7 +9,6 @@ var difflet = require('difflet');
 var diff = difflet({indent:2, comment: true}).compare;
 var assert = require('assert');
 var _ = require('underscore');
-var requestify = require('requestify');
 var parseCookie = require("tough-cookie").Cookie.parse;
 
 var deepequal = require("deep-equal");
@@ -129,15 +128,11 @@ Verity.prototype.setAuthStrategy = function(strategy){
 };
 
 
-Verity.prototype.setCookieFromString = function(str, cb){
+Verity.prototype.setCookieFromString = function(str){
   var that = this;
   var cookie = parseCookie(str).toString();
-  this.cookieJar.setCookie(cookie, '/', {}, function(err){
-    that.cookieJar.getCookies('/', {}, function(err, cookies){
-      cb(err);
-    });
-
-  });
+  this.cookieJar.setCookie(cookie, '/');
+  this.cookieJar.getCookies('/');
 };
 
 Verity.prototype.jsonMode = function(modeOn){
@@ -180,15 +175,10 @@ Verity.prototype.request = function(options, cb){
     if (expected === 0){
       return cb(err, response, body);
     }
-    var doneSetting = function(err){
-     expected -= 1;
-     if (expected === 0){
-       return cb(err, response, body);
-     }
-    };
     cookies.forEach(function(cookie){
-      that.setCookieFromString(cookie, doneSetting);
+      that.setCookieFromString(cookie);
     });
+    return cb(err, response, body);
   });
 };
 
