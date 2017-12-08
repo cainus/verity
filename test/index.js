@@ -301,6 +301,14 @@ describe('verity', function(){
         done();
       });
   });
+  it("gives an informative error if you pass an invalid method", function () {
+    expect(function () { verity('http://localhost:3000/moreJson', "POTS"); })
+      .to.throwError(/Invalid method: POTS/);
+
+      expect(function () { verity('http://localhost:3000/moreJson').method("POTS"); })
+        .to.throwError(/Invalid method: POTS/);
+  });
+
   it("catches mismatches in expectPartialBody", function(done){
     verity('http://localhost:3000/moreJson').
       jsonMode().

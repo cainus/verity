@@ -10,6 +10,7 @@ var diff = difflet({indent:2, comment: true}).compare;
 var assert = require('assert');
 var _ = require('underscore');
 var parseCookie = require("tough-cookie").Cookie.parse;
+var methods = require("http").METHODS;
 
 var deepequal = require("deep-equal");
 var deepmerge = require("deepmerge");
@@ -34,7 +35,7 @@ var Verity = function(uri, _method){
     return new Verity(uri, _method);
   }
   this.uri = urlgrey(uri || 'http://localhost:80');
-  this._method = _method || 'GET';
+  this.method(_method || "GET");
   this._body = '';
   this.cookieJar = request.jar();
   this.client = request.defaults({
@@ -73,6 +74,9 @@ Verity.prototype.body = function(body){
 };
 
 Verity.prototype.method = function(method){
+  if (!methods.includes(method)) {
+    throw new Error("Invalid method: " + method);
+  }
   this._method = method;
   return this;
 };
