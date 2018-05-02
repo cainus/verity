@@ -17,7 +17,6 @@ var deepmerge = require("deepmerge");
 var isSubset = util.isSubset;
 var assertObjectEquals = util.assertObjectEquals;
 
-
 var isString = function(str){
   return toString.call(str) == '[object String]';
 };
@@ -26,6 +25,8 @@ var isFunction = function(functionToCheck) {
  var getType = {};
  return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
 };
+
+var suppressExpectationLogging = false;
 
 // checks a response holistically, rather than in parts,
 // which results in better error output.
@@ -126,7 +127,6 @@ Verity.prototype.setAuthStrategy = function(strategy){
   this.authStrategy = strategy;
   return this;
 };
-
 
 Verity.prototype.setCookieFromString = function(str){
   var that = this;
@@ -284,6 +284,10 @@ Verity.prototype.test = function(cb) {
 };
 
 function makeCombinedError(errors) {
+  if (suppressExpectationLogging) {
+    return new Error("Expectations failed")
+  }
+
   var msg = [];
   var lastError;
   for (var name in errors) {
@@ -503,5 +507,9 @@ Verity.assertObjectEquals = assertObjectEquals;
 Verity.prototype.assertObjectEquals = assertObjectEquals;
 Verity.isSubset = isSubset;
 Verity.prototype.isSubset = isSubset;
+Verity.quiet = function (value) {
+  if (value === undefined) value = true;
+  suppressExpectationLogging = value;
+}
 
 module.exports = Verity;
