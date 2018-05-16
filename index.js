@@ -252,13 +252,6 @@ Verity.prototype.test = function(cb) {
       var unnamedExpectationCount = 1;
       var errors = {};
 
-      var backendStack = res.headers[VERITY_STACK_HEADER] || res.headers[VERITY_STACK_HEADER.toLowerCase()];
-      if (backendStack) {
-        var e = new Error();
-        e.stack = new Buffer(backendStack, 'base64').toString('ascii');
-        errors.Backend = e;
-      }
-
       Object.keys(that._expectations).forEach(function(name){
         try {
           that._expectations[name].call(that, res);
@@ -282,6 +275,12 @@ Verity.prototype.test = function(cb) {
       };
 
       if (!_.isEmpty(errors)) {
+        var backendStack = res.headers[VERITY_STACK_HEADER] || res.headers[VERITY_STACK_HEADER.toLowerCase()];
+        if (backendStack) {
+          var e = new Error();
+          e.stack = new Buffer(backendStack, 'base64').toString('ascii');
+          errors.Backend = e;
+        }
         return cb(makeCombinedError(errors), result);
       } else {
         return cb(null, result);
