@@ -71,6 +71,13 @@ describe('verity', function(){
       res.send({gotCookies : req.cookies});
     });
 
+    app.get('/errorWithStack', function(req, res) {
+      var err = new Error("Kaboom!");
+      res.status(500);
+      res.header("X-Verity-Stack-Trace", new Buffer(err.stack).toString('base64'));
+      res.send({ error: err.message });
+    });
+
     app.get('/nested/path', function(req, res){
       res.send('nested path');
     });
@@ -341,6 +348,16 @@ describe('verity', function(){
           }
         };
         util.assertObjectEquals(flatten(result), flatten(expected));
+        done();
+      });
+  });
+  it("can accept stack traces from the backend", function (done) {
+    verity('http://localhost:3000/errorWithStack')
+      .jsonMode()
+      .expectStatus(200)
+      .test(function(err) {
+        expect(err.message).to.contain("Error: Kaboom!"); // backend error
+        expect(err.message).to.contain("Expected status 200 but got 500");
         done();
       });
   });

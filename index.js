@@ -17,7 +17,6 @@ var deepmerge = require("deepmerge");
 var isSubset = util.isSubset;
 var assertObjectEquals = util.assertObjectEquals;
 
-
 var isString = function(str){
   return toString.call(str) == '[object String]';
 };
@@ -26,6 +25,9 @@ var isFunction = function(functionToCheck) {
  var getType = {};
  return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
 };
+
+var suppressExpectationLogging = false;
+var VERITY_STACK_HEADER = "X-Verity-Stack-Trace";
 
 // checks a response holistically, rather than in parts,
 // which results in better error output.
@@ -126,7 +128,6 @@ Verity.prototype.setAuthStrategy = function(strategy){
   this.authStrategy = strategy;
   return this;
 };
-
 
 Verity.prototype.setCookieFromString = function(str){
   var that = this;
@@ -250,9 +251,10 @@ Verity.prototype.test = function(cb) {
       // Determine which tests failed.
       var unnamedExpectationCount = 1;
       var errors = {};
+
       Object.keys(that._expectations).forEach(function(name){
         try {
-          that._expectations[name].bind(that)(res);
+          that._expectations[name].call(that, res);
         } catch (err) {
           err.error = err.message; // err.message won't log with JSON.stringify
           errors[name] = err;
@@ -273,6 +275,12 @@ Verity.prototype.test = function(cb) {
       };
 
       if (!_.isEmpty(errors)) {
+        var backendStack = res.headers[VERITY_STACK_HEADER] || res.headers[VERITY_STACK_HEADER.toLowerCase()];
+        if (backendStack) {
+          var e = new Error();
+          e.stack = new Buffer(backendStack, 'base64').toString('ascii');
+          errors.Backend = e;
+        }
         return cb(makeCombinedError(errors), result);
       } else {
         return cb(null, result);
@@ -284,6 +292,10 @@ Verity.prototype.test = function(cb) {
 };
 
 function makeCombinedError(errors) {
+  if (suppressExpectationLogging) {
+    return new Error("Expectations failed");
+  }
+
   var msg = [];
   var lastError;
   for (var name in errors) {
@@ -503,5 +515,9 @@ Verity.assertObjectEquals = assertObjectEquals;
 Verity.prototype.assertObjectEquals = assertObjectEquals;
 Verity.isSubset = isSubset;
 Verity.prototype.isSubset = isSubset;
+Verity.quiet = function (value) {
+  if (value === undefined) value = true;
+  suppressExpectationLogging = value;
+};
 
 module.exports = Verity;
