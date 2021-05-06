@@ -45,7 +45,7 @@
     "request": "^2.83.0",
     "superagent": "^3.8.1",
     "tough-cookie": "^2.3.3",
-    "underscore": "~1.5.2",
+    "underscore": "~1.12.1",
     "urlgrey": "0.4.4"
   }
 }
