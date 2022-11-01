@@ -30,9 +30,9 @@
   "devDependencies": {
     "coveralls": "2.7.0",
     "express": "3.4.8",
-    "istanbul": "0.2.4",
+    "istanbul": "0.4.5",
     "mocha": "^3.5.3",
-    "jshint": "2.4.3"
+    "jshint": "2.13.5"
   },
   "dependencies": {
     "JSONPath": "~0.9.1",
